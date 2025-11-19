@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="">
+    </script>
+  <style>
+    #map {
+      height: 100vh;
+    }
+
+    body {
+      margin: 0;
+    }
+
+    .popup {
+      width: 200px;
+      height: 200px;
+      ;
+      border: 1px solid black;
+      position: absolute;
+      left: 0;
+      top: 0;
+      z-index: 1000;
+      background-color: rgb(201, 147, 40);
+    }
+  </style>
+</head>
+
+<body>
+  <div id="map"></div>
+  <div class="popup">
+    <video id="remoteVideo" style="width: 100%; height: 100%;" autoplay playsinline></video>
+  </div>
+  <script>
+    function escapeHtml(unsafe) {
+      return unsafe
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    var map = L.map('map').setView([52.1412, 11.6548], 16);
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+      attribution: 'Tiles © Esri',
+      maxZoom: 19
+    }).addTo(map);
+
+    const vehicleMarkers = {}
+
+    const occId = "occ_" + Math.floor(Math.random() * 100000)
+    console.log("occId=", occId)
+
+    // async function createConnection() {
+    const conn = new RTCPeerConnection({
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+      ]
+    })
+    const videoEl = document.getElementById("remoteVideo");
+    conn.ontrack = (event) => {
+      console.log("RECV")
+      console.log("Track:", event.track.kind, event.track.readyState);
+      console.log(event.streams)
+      videoEl.srcObject = event.streams[0];
+    };
+    conn.onconnectionstatechange = console.log
+    // conn.createDataChannel('dummy')
+    conn.addTransceiver('video');
+
+    //   conn.getSenders().forEach(function(sender) {
+    //     // with our one way setup, seems like sender.track can be null - makes sense
+    //     if (sender.track) {
+    //         sender.track.stop();
+    //     }
+    // });
+    // }
+
+    async function start(vehicleId) {
+      console.log("Starting WebRTC for", vehicleId)
+      async function sendIceCandidate(candidate) {
+        if (!candidate) return
+        console.log("New ice candidate", candidate)
+        await fetch(`/send?Recipient=${vehicleId}`, {
+          method: "POST",
+          body: JSON.stringify({ "Type": "ice", "Candidate": candidate.toJSON() })
+        })
+      }
+      conn.onicecandidate = async (e) => { await sendIceCandidate(e.candidate) }
+
+      const offer = await conn.createOffer()
+      await conn.setLocalDescription(offer)
+      await fetch(`/send?Recipient=${vehicleId}`, {
+        method: "POST",
+        body: JSON.stringify({ "Type": "offer", "OccId": occId, "Sdp": offer.sdp })
+      })
+    }
+    window.startWebRTC = async (vehicleId) => await start(vehicleId)
+
+    async function startWebTransport() {
+      const url = `https://localhost/wt-occ?OccId=${occId}`;
+      const transport = new WebTransport(url);
+
+      await transport.ready;
+      console.log("Connected via WebTransport!");
+
+      const datagramWriter = transport.datagrams.writable.getWriter();
+      setInterval(() => {
+        datagramWriter.write(new Uint8Array([0])); // 1-byte ping
+      }, 5000);
+
+      const stream = await transport.createBidirectionalStream();
+      const reader = stream.readable.getReader();
+
+      let buffer = []
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        for (let i = 0; i < value.length; i++) {
+          if (value[i] != 0) {
+            buffer.push(value[i])
+          } else {
+            const decoder = new TextDecoder();
+            const data = JSON.parse(decoder.decode(new Uint8Array(buffer)))
+            buffer = []
+            const type = data["Type"]
+            if (type == "status") {
+              for (vehicle of data["Vehicles"]) {
+                let marker = vehicleMarkers[vehicle.Id]
+                if (!marker) {
+                  var popup = L.popup()
+                  marker = L.marker([vehicle.Lat, vehicle.Lon]).addTo(map);
+                  vehicleMarkers[vehicle.Id] = marker
+                  marker.bindPopup('', { closeOnClick: false, autoClose: false })
+                }
+                const con = vehicle.Connected ? '<span style="color:green">✓</span>' : '<span style="color:red">x</span>'
+                marker.getPopup().setContent(`
+                <b>${escapeHtml(vehicle.Name)}</b>
+                <br>Connected: ${con}
+                <button onclick="startWebRTC('${vehicle.Id}')">Live</button>
+              `)
+                marker.openPopup()
+              }
+            } else if (type == "answer") {
+              await conn.setRemoteDescription({
+                sdp: data["Sdp"],
+                type: 'answer',
+              })
+            } else {
+              console.error("Unknown type", type)
+            }
+          }
+        }
+      }
+    }
+
+    startWebTransport().then()
+
+  </script>
+</body>
+
+</html>
