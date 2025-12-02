@@ -1,83 +1,19 @@
 package main
 
 import (
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
 	"crypto/tls"
-	"crypto/x509"
-	"crypto/x509/pkix"
 	"encoding/json"
-	"encoding/pem"
+	"flag"
 	"io"
 	"log"
-	"math/big"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/http3"
 	"github.com/quic-go/webtransport-go"
+	"golang.org/x/crypto/acme/autocert"
 )
-
-const (
-	certFile = "certs/server.crt"
-	keyFile  = "certs/server.key"
-)
-
-// generateSelfSignedCert creates a new self-signed cert/key pair and saves them.
-func generateSelfSignedCert() error {
-	log.Println("🔏 Generating new self-signed TLS certificate...")
-
-	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		return err
-	}
-
-	tmpl := x509.Certificate{
-		SerialNumber: big.NewInt(1),
-		Subject: pkix.Name{
-			CommonName: "localhost",
-		},
-		NotBefore:             time.Now(),
-		NotAfter:              time.Now().AddDate(1, 0, 0), // 1 year
-		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		BasicConstraintsValid: true,
-		DNSNames:              []string{"localhost"},
-	}
-
-	der, err := x509.CreateCertificate(rand.Reader, &tmpl, &tmpl, &priv.PublicKey, priv)
-	if err != nil {
-		return err
-	}
-
-	// Save certificate
-	if err := os.MkdirAll("certs", 0700); err != nil {
-		return err
-	}
-	certOut, _ := os.Create(certFile)
-	pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: der})
-	certOut.Close()
-
-	// Save private key
-	keyOut, _ := os.Create(keyFile)
-	b, _ := x509.MarshalECPrivateKey(priv)
-	pem.Encode(keyOut, &pem.Block{Type: "EC PRIVATE KEY", Bytes: b})
-	keyOut.Close()
-
-	log.Printf("✅ Saved cert: %s and key: %s\n", certFile, keyFile)
-	return nil
-}
-
-func ensureCertExists() {
-	if _, err := os.Stat(certFile); os.IsNotExist(err) {
-		if err := generateSelfSignedCert(); err != nil {
-			log.Fatalf("failed to generate cert: %v", err)
-		}
-	}
-}
 
 type Vehicle struct {
 	Id        ClientIdType
@@ -119,16 +55,30 @@ func main() {
 		{"tugger_train", "Tugger Train", 52.143145559062944, 11.65555937689635, false, "d93947a0684c917a1d2006f382a69695e3b35b4336935e7ce7ca3347ae5b1339"},
 	}
 
-	ensureCertExists()
+	var hostname string
+	flag.StringVar(&hostname, "hostname", "localhost", "the server's host name")
+	var useAcme bool
+	flag.BoolVar(&useAcme, "use-acme", false, "use ACME (Let's Encrypt) instead of self-signed certificates")
+	flag.Parse()
 
-	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
-	if err != nil {
-		log.Fatalf("failed to load TLS cert: %v", err)
-	}
-
-	tlsConf := &tls.Config{
-		Certificates: []tls.Certificate{cert},
-		MinVersion:   tls.VersionTLS13,
+	var tlsConf *tls.Config
+	const certdDir = "/certs"
+	if useAcme {
+		m := &autocert.Manager{
+			Cache:      autocert.DirCache(certdDir),
+			Prompt:     autocert.AcceptTOS,
+			HostPolicy: autocert.HostWhitelist(hostname),
+		}
+		tlsConf = m.TLSConfig()
+	} else {
+		cert, err := createOrLoadCertificates(hostname, certdDir)
+		if err != nil {
+			log.Fatalf("failed to load TLS cert: %v", err)
+		}
+		tlsConf = &tls.Config{
+			Certificates: []tls.Certificate{cert},
+			MinVersion:   tls.VersionTLS13,
+		}
 	}
 
 	// redirect HTTP to HTTPS
@@ -215,10 +165,7 @@ func main() {
 	mux.HandleFunc("/send", func(w http.ResponseWriter, r *http.Request) {
 		recipient := r.URL.Query().Get("Recipient")
 		bytes, _ := io.ReadAll(r.Body)
-
-		log.Println("Send")
-		err = vehicleBroker.sendMessage(ClientIdType(recipient), bytes)
-		log.Println("Send done")
+		err := vehicleBroker.sendMessage(ClientIdType(recipient), bytes)
 		if err == nil {
 			w.WriteHeader(http.StatusOK)
 		} else {
@@ -248,7 +195,7 @@ func main() {
 				occBroker.updateStatus(statusMessage)
 			case msg := <-vehicleBroker.Messages:
 				result := IncomingMsg{}
-				err = json.Unmarshal(msg.Payload, &result)
+				err := json.Unmarshal(msg.Payload, &result)
 				if err != nil {
 					log.Println("Received invalid message")
 				}
@@ -269,6 +216,6 @@ func main() {
 	}()
 
 	log.Println("Starting HTTP/3 server (UDP/QUIC) on", h3srv.Addr)
-	err = wtSrv.ListenAndServe()
+	err := wtSrv.ListenAndServe()
 	log.Fatal("HTTP/3 failed:", err)
 }

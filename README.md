@@ -1,11 +1,19 @@
-# Chrome:
+# Chrome
+
+```sh
 chrome \
   --enable-quic \
   --origin-to-force-quic-on=localhost:443 \
-Addionally import certificate
+```
 
-# Firefox
+Additionally import certificate
 
-about:config
-network.http.http3.alt-svc-mapping-for-testing
-localhost;h3=":4433"
+# FAQs
+
+Error: failed to sufficiently increase receive buffer size
+
+```sh
+wsl
+sysctl -w net.core.rmem_max=7500000
+sysctl -w net.core.wmem_max=7500000
+```

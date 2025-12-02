@@ -3,6 +3,7 @@ services:
     image: golang:1.25
     volumes:
       - ./src:/app
+      - ./certs:/certs
     working_dir: /app
     ports:
       - 80:80 # http
