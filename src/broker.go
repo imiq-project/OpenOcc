@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"sync"
@@ -122,11 +123,17 @@ func (h *WebtransportBroker) HandleSession(clientId ClientIdType, session *webtr
 	defer session.CloseWithError(0, "")
 
 	client := &WebTransportClient{session, stream, sync.Mutex{}}
-	h.clients.Store(clientId, client)
+	previous, existed := h.clients.Swap(clientId, client)
+	if existed {
+		log.Println("Closing existing session")
+		previousClient := previous.(*WebTransportClient)
+		previousClient.stream.CancelRead(0)
+		previousClient.stream.CancelWrite(0)
+		previousClient.session.CloseWithError(0, "")
+	}
 	h.Connected <- clientId
 	log.Println("New client connected", clientId, session.RemoteAddr())
 
-	// TODO: lock needed?
 	if len(h.statusMessage) > 0 {
 		client.writeMutex.Lock()
 		writeAll(h.statusMessage, stream)
@@ -139,7 +146,7 @@ func (h *WebtransportBroker) HandleSession(clientId ClientIdType, session *webtr
 			if err != nil {
 				log.Println("Datagram error:", err)
 				// we remove the client below
-				return
+				break
 			}
 			h.Datagrams <- BrokerMessage{clientId, data}
 		}
@@ -152,9 +159,14 @@ func (h *WebtransportBroker) HandleSession(clientId ClientIdType, session *webtr
 		n, err := stream.Read(data)
 		if err != nil {
 			log.Println("Read error:", err)
-			log.Println("Remove client", clientId, session.RemoteAddr())
-			h.clients.Delete(clientId)
-			h.Disconnected <- clientId
+			var streamErr *webtransport.StreamError
+			if errors.As(err, &streamErr) && !streamErr.Remote {
+				log.Println("We closed the stream, client already removed")
+			} else {
+				log.Println("Remove client", clientId, session.RemoteAddr())
+				h.clients.Delete(clientId)
+				h.Disconnected <- clientId
+			}
 			break
 		}
 		for _, i := range data[:n] {
