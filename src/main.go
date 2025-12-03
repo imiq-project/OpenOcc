@@ -69,31 +69,42 @@ func main() {
 			Prompt:     autocert.AcceptTOS,
 			HostPolicy: autocert.HostWhitelist(hostname),
 		}
+
+		// HTTP server: redirect all traffic to HTTPS
+		go func() {
+			httpServer := &http.Server{
+				Addr:    ":80",
+				Handler: m.HTTPHandler(nil), // HTTP-01 challenge + redirect
+			}
+			log.Fatal(httpServer.ListenAndServe())
+		}()
+
 		tlsConf = m.TLSConfig()
 	} else {
 		cert, err := createOrLoadCertificates(hostname, certdDir)
 		if err != nil {
 			log.Fatalf("failed to load TLS cert: %v", err)
 		}
+
+		// redirect HTTP to HTTPS
+		go func() {
+			mux := http.NewServeMux()
+			mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+				target := "https://" + r.Host + r.URL.RequestURI()
+				http.Redirect(w, r, target, http.StatusMovedPermanently)
+			})
+			srv := &http.Server{
+				Addr:    ":80",
+				Handler: AltSvc("443")(mux),
+			}
+			log.Fatal(srv.ListenAndServe())
+		}()
+
 		tlsConf = &tls.Config{
 			Certificates: []tls.Certificate{cert},
 			MinVersion:   tls.VersionTLS13,
 		}
 	}
-
-	// redirect HTTP to HTTPS
-	go func() {
-		mux := http.NewServeMux()
-		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-			target := "https://" + r.Host + r.URL.RequestURI()
-			http.Redirect(w, r, target, http.StatusMovedPermanently)
-		})
-		srv := &http.Server{
-			Addr:    ":80",
-			Handler: AltSvc("443")(mux),
-		}
-		srv.ListenAndServe()
-	}()
 
 	mux := http.NewServeMux()
 
