@@ -87,7 +87,7 @@ class H3ClientProtocol(QuicConnectionProtocol):
                 (b":scheme", b"https"),
                 (b":protocol", b"webtransport"),
                 (b":path", path),
-                (b":authority", f"localhost:443".encode()), # TODO: adapt
+                (b":authority", f"imiq-occ.et.uni-magdeburg.de:443".encode()), # TODO: adapt
                 (b"sec-webtransport-http3-draft02", b"1"),
             ],
         )
@@ -124,7 +124,7 @@ class H3ClientProtocol(QuicConnectionProtocol):
 
 async def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--host", default="localhost")
+    parser.add_argument("--host", default="imiq-occ.et.uni-magdeburg.de")
     parser.add_argument("--port", type=int, default=443)
     parser.add_argument("--insecure", action="store_true", default=True)
     args = parser.parse_args()

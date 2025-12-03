@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+
+<body>
+    <h1>Vehicle</h1>
+    <video id="localVideo" style="width: 100px; height: 100px;" autoplay playsinline></video>
+
+    <script>
+        const vehicleId = "cargo_bike"
+
+        const conn = new RTCPeerConnection({
+            iceServers: [
+                { urls: "stun:stun.l.google.com:19302" },
+            ]
+        })
+        conn.onconnectionstatechange = console.log
+        conn.onicecandidate = console.log
+        conn.ontrack = console.log
+
+        async function startWebTransport() {
+            const url = `https://${window.location.host}/wt-vehicle?VehicleId=${vehicleId}`;
+            const transport = new WebTransport(url);
+
+            await transport.ready;
+            console.log("Connected via WebTransport!");
+
+            const datagramWriter = transport.datagrams.writable.getWriter();
+            await datagramWriter.write(new Uint8Array([0])); // 1-byte ping
+            setInterval(async () => {
+                await datagramWriter.write(new Uint8Array([0])); // 1-byte ping
+            }, 5000);
+
+            const stream = await transport.createBidirectionalStream();
+            const reader = stream.readable.getReader();
+            const writer = stream.writable.getWriter();
+
+            let buffer = []
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                for (let i = 0; i < value.length; i++) {
+                    if (value[i] != 0) {
+                        buffer.push(value[i])
+                    } else {
+                        const decoder = new TextDecoder();
+                        const data = JSON.parse(decoder.decode(new Uint8Array(buffer)))
+                        buffer = []
+                        const type = data["Type"]
+                        if (type == "offer") {
+                            console.log("Received offer")
+                            const localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                            localStream.getTracks().forEach((track) => conn.addTrack(track, localStream));
+                            document.getElementById("localVideo").srcObject = localStream;
+
+                            await conn.setRemoteDescription({
+                                sdp: data["Sdp"],
+                                type: 'offer',
+                            })
+                            const answer = await conn.createAnswer()
+                            console.log("Sending answer")
+                            await writer.write(new TextEncoder().encode(JSON.stringify({
+                                "Type": "answer",
+                                "Recipient": data["OccId"],
+                                "Sdp": answer.sdp
+                            })))
+                            await writer.write(new Uint8Array([0]))
+                        } else if (type == "ice") {
+                            console.log("Received ice candidate", data)
+                            await conn.addIceCandidate(data["Candidate"])
+                        } else {
+                            console.error("Unknown type", type)
+                        }
+                    }
+                }
+            }
+        }
+
+        startWebTransport().then()
+    </script>
+</body>
+
+</html>

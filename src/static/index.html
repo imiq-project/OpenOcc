@@ -103,7 +103,7 @@
     window.startWebRTC = async (vehicleId) => await start(vehicleId)
 
     async function startWebTransport() {
-      const url = `https://localhost/wt-occ?OccId=${occId}`;
+      const url = `https://${window.location.host}/wt-occ?OccId=${occId}`;
       const transport = new WebTransport(url);
 
       await transport.ready;
