@@ -6,6 +6,16 @@ google-chrome --enable-quic --origin-to-force-quic-on=localhost:443 https://loca
 
 Additionally import certificate
 
+# Compose
+
+```yml
+services:
+  server:
+    command: sleep infinity
+    volumes:
+      - ./src:/app
+```
+
 # FAQs
 
 Error: failed to sufficiently increase receive buffer size

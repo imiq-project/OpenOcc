@@ -1,13 +1,12 @@
 services:
   server:
-    build: src
+    build:
+      context: src
+      dockerfile: Dockerfile
     restart: always
     volumes:
-      - ./src:/app
       - ./certs:/certs
-    working_dir: /app
     ports:
       - 80:80 # http
       - 443:443/tcp # https
       - 443:443/udp # http/3
-    command: sleep infinity
