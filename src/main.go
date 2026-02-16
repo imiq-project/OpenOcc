@@ -129,10 +129,10 @@ func main() {
 	}
 
 	// Serve static files
-	fs := http.FileServer(http.Dir("./static"))
+	fs := http.FileServer(http.Dir("./frontend/dist/frontend/browser"))
 	mux.Handle("/static/", http.StripPrefix("/static/", fs))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "./static/index.html")
+		http.ServeFile(w, r, "./frontend/dist/frontend/browser/index.html")
 	})
 
 	vehicleBroker := NewWebTransportBroker()

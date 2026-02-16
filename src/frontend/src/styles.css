@@ -1,0 +1,14 @@
+body {
+    margin: 0;
+}
+
+.video-popup {
+    width: 200px;
+    height: 200px;
+    border: 1px solid black;
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    z-index: 1000;
+    background-color: rgb(201, 147, 40);
+}

@@ -1,0 +1,39 @@
+<div (keydown)="keydown($event)" (keyup)="keyup($event)">
+    <drawer></drawer>
+    <router-outlet />
+    <p-toast />
+    <leaflet-map [center]="[52.14119101024145, 11.654780681884725]" [zoom]="16">
+        @for (vehicle of vehicles(); track vehicle.id) {
+        <leaflet-marker [lat]="vehicle.lat" [lng]="vehicle.lon">
+            <ng-template leafletPopup>
+                <div class="popup">
+                    <h3>{{ vehicle.name }}</h3>
+                    @if (vehicle.connected) {
+                    <p-tag severity="success" value="Connected" />
+                    <br>
+                    <p-button (click)="startTeleop(vehicle)" label="Teleoperate" />
+                    } @else {
+                    <p-tag severity="danger" value="Disconnected" />
+                    }
+                </div>
+            </ng-template>
+        </leaflet-marker>
+        }
+    </leaflet-map>
+
+    <p-dialog [visible]="rtcStatus().state != RtcState.Disconnected" [closable]="false">
+        <ng-template #header>
+            <div>{{ rtcStatus().vehicle?.name }}</div>
+        </ng-template>
+        <div style="width: 600px; height: 400px;">
+            <video #remoteVideo style="width: 100%; height: 100%; object-fit: contain;" muted autoplay
+                playsinline></video>
+        </div>
+        <ng-template #footer>
+            @if (rtcStatus().state == RtcState.Connecting) {
+            <p-progress-spinner />
+            }
+            <p-button label="Disconnect" (click)="stopTeleop()"></p-button>
+        </ng-template>
+    </p-dialog>
+</div>

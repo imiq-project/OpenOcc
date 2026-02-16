@@ -1,9 +1,7 @@
 # Chrome
 
 ```sh
-chrome \
-  --enable-quic \
-  --origin-to-force-quic-on=localhost:443 \
+google-chrome --enable-quic --origin-to-force-quic-on=localhost:443 https://localhost
 ```
 
 Additionally import certificate

@@ -1,6 +1,7 @@
 services:
   server:
-    image: golang:1.25
+    build: src
+    restart: always
     volumes:
       - ./src:/app
       - ./certs:/certs
