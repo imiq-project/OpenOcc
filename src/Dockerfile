@@ -1,7 +1,7 @@
 FROM node:24 AS build_js
 RUN npm install -g @angular/cli@21
 COPY frontend ./frontend
-RUN cd frontend && npm run build
+RUN cd frontend && npm install && npm run build
 
 FROM golang:1.25 AS build_go
 COPY go.mod go.sum *.go ./

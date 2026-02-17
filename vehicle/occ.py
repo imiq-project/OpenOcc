@@ -141,7 +141,11 @@ class OccClient:
         logging.info("New ice candidate")
         c = ice["Candidate"]
         assert isinstance(c, dict)
-        candidate = candidate_from_aioice(Candidate.from_sdp(c["candidate"]))
+        try:
+            candidate = candidate_from_aioice(Candidate.from_sdp(c["candidate"]))
+        except ValueError as e:
+            logging.error(f"Invalid candiate: {e}")
+            return
         candidate.sdpMid = c.get("sdpMid")
         candidate.sdpMLineIndex = c.get("sdpMLineIndex")
         await self._rtc_connection.addIceCandidate(candidate)

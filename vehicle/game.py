@@ -148,7 +148,7 @@ class Game:
 
     def get_window_frame(self):
         if not self.cam_texture.hasRamImage():
-            self.cam_texture.storeRamImage()
+            self.cam_texture.makeRamImage()
         data = self.cam_texture.getRamImage()
 
         xsize = self.cam_texture.getXSize()
