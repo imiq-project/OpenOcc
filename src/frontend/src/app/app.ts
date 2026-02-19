@@ -14,10 +14,11 @@ import { TagModule } from 'primeng/tag';
 import { ButtonModule } from 'primeng/button';
 import { DialogModule } from 'primeng/dialog';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
+import { ConfigDialog } from './config-dialog/config-dialog';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, AppDrawer, ToastModule, LeafletModule, TagModule, ButtonModule, DialogModule, ProgressSpinnerModule],
+  imports: [RouterOutlet, AppDrawer, ToastModule, LeafletModule, TagModule, ButtonModule, DialogModule, ProgressSpinnerModule, ConfigDialog],
   templateUrl: './app.html',
   styleUrl: './app.css'
 })
@@ -25,6 +26,7 @@ export class App implements OnInit, OnDestroy {
   RtcState = RtcState // expose to template
   vehicles = signal<Vehicle[]>([]);
   rtcStatus = signal<RtcStatus>(new RtcStatus(RtcState.Disconnected))
+  vehicleToConfigure = signal<Vehicle|null>(null)
 
   subs = new Subscription();
 

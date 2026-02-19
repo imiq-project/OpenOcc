@@ -1,16 +1,43 @@
-<div class="card flex justify-center">
+<div>
     <p-drawer [(visible)]="visible">
         <ng-template #header>
-            <div class="flex align-items-center gap-2">
+            <div class="flex items-center gap-2">
                 <img src="/static/logo.png" style="width: 64px;">
                 <span class="font-bold">OpenOcc</span>
             </div>
         </ng-template>
-        <p>
-            Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore
-            et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut
-            aliquip ex ea commodo consequat.
-        </p>
+        <p-panel header="Cargo Vehicles MD" [toggleable]="true">
+            <p>
+                Cargo vehicles traversing the Magdeburg science harbor and campus.
+            </p>
+            <div class="m-4">
+                <p-button [style]="{width: '100%'}" severity="secondary">Manage access</p-button>
+            </div>
+
+            @for (vehicle of vehicles(); track vehicle.id) {
+            <div class="mt-8 flex items-center justify-between">
+                <span>{{ vehicle.name }}</span>
+                <div>
+                    <div>
+                        @if (!vehicle.connected) {
+                        <p-tag class="mr-4" severity="danger" value="Offline" />
+                        } @else {
+                            <p-button icon="pi pi-forward" size="small" />
+                        }
+                        <p-button (click)="onConfigureVehicle(vehicle)" icon="pi pi-cog"  size="small" />
+                    </div>
+                </div>
+            </div>
+            } @empty {
+            <i>No vehicles assigned to this fleet.</i>
+            }
+            <div class="mt-8">
+                <p-button [style]="{width: '100%'}" severity="secondary">Add Vehicle</p-button>
+            </div>
+        </p-panel>
+        <div class="m-4">
+            <p-button [style]="{width: '100%'}" severity="secondary">Add Fleet</p-button>
+        </div>
         <ng-template #footer>
             <div class="flex items-center gap-2">
                 <button pButton label="Account" icon="pi pi-user" class="w-full" outlined></button>
@@ -18,5 +45,6 @@
             </div>
         </ng-template>
     </p-drawer>
-    <button pButton (click)="visible = true" icon="pi pi-bars" style="z-index: 1000; position: absolute; left: 8px; top: 80px;"></button>
+    <button pButton (click)="visible = true" icon="pi pi-bars"
+        style="z-index: 1000; position: absolute; left: 8px; top: 80px;"></button>
 </div>

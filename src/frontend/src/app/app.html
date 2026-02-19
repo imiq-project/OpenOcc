@@ -1,19 +1,21 @@
 <div (keydown)="keydown($event)" (keyup)="keyup($event)">
-    <drawer></drawer>
+    <drawer [vehicles]="vehicles()" (configureVehicle)="vehicleToConfigure.set($event)"></drawer>
     <router-outlet />
     <p-toast />
+    <config-dialog [(vehicle)]="vehicleToConfigure"></config-dialog>
+
     <leaflet-map [center]="[52.14119101024145, 11.654780681884725]" [zoom]="16">
         @for (vehicle of vehicles(); track vehicle.id) {
         <leaflet-marker [lat]="vehicle.lat" [lng]="vehicle.lon">
             <ng-template leafletPopup>
-                <div class="popup">
-                    <h3>{{ vehicle.name }}</h3>
+                <div style="width: 150px;">
+                    <p class="font-bold">{{ vehicle.name }}</p>
                     @if (vehicle.connected) {
-                    <p-tag severity="success" value="Connected" />
-                    <br>
-                    <p-button (click)="startTeleop(vehicle)" label="Teleoperate" />
+                    <div class="flex flex-col">
+                        <div><p-button icon="pi pi-forward" size="small" (click)="startTeleop(vehicle)" label="Teleoperate" outlined/></div>
+                    </div>
                     } @else {
-                    <p-tag severity="danger" value="Disconnected" />
+                    <p-tag severity="danger" value="Offline" />
                     }
                 </div>
             </ng-template>

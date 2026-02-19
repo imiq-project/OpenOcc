@@ -1,0 +1,18 @@
+<div style="width: 600px; height: 400px; position: relative;" class="checkerboard">
+    @for(item of configuration(); track $index) {
+        @switch(item.type) {
+            @case("video") {
+                <div class="video-preview" [ngStyle]="styleFor(item)">{{item.param}}</div>
+            }
+            @case("knob") {
+                <p-knob [ngStyle]="styleFor(item, false)" [size]="item.width" [valueTemplate]="item.param" [ngModel]="20"></p-knob>
+            }
+            @case("slider") {
+                <div [ngStyle]="styleFor(item)">
+                    <p-slider style="width: 100%; height: 100%;" [ngModel]="20" disabled></p-slider>
+                    <div style="position: absolute; left: 0; top: 0;">{{item.param}}</div>
+                </div>
+            }
+        }
+    }
+</div>

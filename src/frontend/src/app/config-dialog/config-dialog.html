@@ -1,0 +1,211 @@
+<p-dialog [visible]="vehicle() != null" (onHide)="vehicleChange.emit(null)">
+    @if(vehicle()) {
+    <ng-template #header>
+        {{vehicle()!.name}}
+    </ng-template>
+    <div style="width: 800px; height: 600px;">
+        <p-tabs value="info">
+            <p-tablist>
+                <p-tab value="info">Info</p-tab>
+                <p-tab value="ui">UI</p-tab>
+                <p-tab value="keyboard">Keyboard</p-tab>
+                <p-tab value="smartphone">Smartphone</p-tab>
+                <p-tab value="gamepad">Gamepad</p-tab>
+            </p-tablist>
+            <p-tabpanels>
+                <p-tabpanel value="info">
+                    <div class="grid grid-cols-3 gap-4">
+                        <div>Name</div>
+                        <div class="col-span-2">{{ vehicle()!.name }}</div>
+                        <div>ID</div>
+                        <div class="col-span-2 font-mono">{{ vehicle()!.id }}</div>
+                        <div>Description</div>
+                        <div class="col-span-2">A mobile robot capable of carrying lower weight goods and deliver these
+                            autonomously.</div>
+                    </div>
+                    <div class="mb-8">
+                        <div class="text-xl font-bold">Continuous Inputs</div>
+                        <p>
+                            Continuous inputs are send periodically to the device.
+                            These are used to set a target state of the vehicle, e.g., to steer it.
+                            It is not guaranteed, that every update of continuous inputs is received by the vehicle.
+                        </p>
+                        <div class="mt-8 ml-4">
+                            <p-table [value]="continuousInputs()">
+                                <ng-template #header>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Type</th>
+                                        <th>Description</th>
+                                    </tr>
+                                </ng-template>
+                                <ng-template #body let-input>
+                                    <tr>
+                                        <td>{{ input.name }}</td>
+                                        <td>{{ input.type }}</td>
+                                        <td>{{ input.description }}</td>
+                                    </tr>
+                                </ng-template>
+                            </p-table>
+                        </div>
+                    </div>
+                    <div class="mb-8">
+                        <div class="text-xl font-bold">Continuous Outputs</div>
+                        <p>
+                            Continuous outputs are send periodically from the device.
+                            These are used to transfer the current state of the robot.
+                            It is not guaranteed, that every update of continuous outputs arrives at OpenOcc.
+                        </p>
+                        <div class="mt-8 ml-4">
+                            <p-table [value]="continuousOutputs()">
+                                <ng-template #header>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Type</th>
+                                        <th>Description</th>
+                                    </tr>
+                                </ng-template>
+                                <ng-template #body let-output>
+                                    <tr>
+                                        <td>{{ output.name }}</td>
+                                        <td>{{ output.type }}</td>
+                                        <td>{{ output.description }}</td>
+                                    </tr>
+                                </ng-template>
+                            </p-table>
+                        </div>
+                    </div>
+                    <div class="mb-8">
+                        <div class="text-xl font-bold">Commands</div>
+                        <p>
+                            Commands are send individually on demand.
+                            They are used to trigger special functions like emergency stops.
+                            It is guaranteed that they arrive at the vehicle exactly once.
+                        </p>
+                        <div class="mt-8 ml-4">
+                            <p-table [value]="commands()">
+                                <ng-template #header>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Parameters</th>
+                                        <th>Description</th>
+                                    </tr>
+                                </ng-template>
+                                <ng-template #body let-command>
+                                    <tr>
+                                        <td>{{ command.name }}</td>
+                                        <td>{{ command.parameters }}</td>
+                                        <td>{{ command.description }}</td>
+                                    </tr>
+                                </ng-template>
+                            </p-table>
+                        </div>
+                    </div>
+
+                    <div class="mt-32 flex justify-end">
+                        <p-button severity="danger" label="Remove from fleet"></p-button>
+                    </div>
+                </p-tabpanel>
+                <p-tabpanel value="ui">
+                    <p>
+                        The user interface is shown to the operator when starting the teleoperation.
+                        You can use it to visualize any continuous output variable.
+                    </p>
+                    <operation-ui class="m-32"></operation-ui>
+                </p-tabpanel>
+                <p-tabpanel value="keyboard">
+                    <div>
+                        <p>You can control the vehicle using your keyboard.</p>
+
+                        <div class="m-2">
+                            <p-checkbox inputId="enableKeyboard" [(ngModel)]="keyboardEnabled" binary></p-checkbox>
+                            <label for="inputId" class="ml-2">Enable keyboard input</label>
+                        </div>
+
+                        <div class="mt-8 ml-4">
+                            <p-table [value]="keyboardBindings()">
+                                <ng-template #header>
+                                    <tr>
+                                        <th>Key</th>
+                                        <th>Parameter</th>
+                                        <th>Mode</th>
+                                    </tr>
+                                </ng-template>
+                                <ng-template #body let-input>
+                                    <tr>
+                                        <td>{{ input.key }}</td>
+                                        <td>{{ input.param }}</td>
+                                        <td>
+                                            <p-select [options]="keyboardModes" [(ngModel)]="input.mode" optionLabel="name" optionValue="value"></p-select>
+                                        </td>
+                                    </tr>
+                                </ng-template>
+                            </p-table>
+                        </div>
+                    </div>
+                </p-tabpanel>
+                <p-tabpanel value="smartphone">
+                    <div>
+                        <p>You can control the vehicle using your smartphone.</p>
+
+                        <div class="m-2">
+                            <p-checkbox inputId="enableSmartPhone" [(ngModel)]="smartphoneEnabled" binary></p-checkbox>
+                            <label for="enableSmartPhone" class="ml-2">Enable smartphone input</label>
+                        </div>
+
+                        <div class="mt-8 ml-4">
+                            <p-table [value]="smartphoneBindings()">
+                                <ng-template #header>
+                                    <tr>
+                                        <th>Move</th>
+                                        <th>Parameter</th>
+                                    </tr>
+                                </ng-template>
+                                <ng-template #body let-input>
+                                    <tr>
+                                        <td>
+                                            <p-select [options]="smartphoneMoves()" [(ngModel)]="input.move" optionLabel="name" optionValue="value"></p-select>
+                                        </td>
+                                        <td>{{ input.param }}</td>
+                                    </tr>
+                                </ng-template>
+                            </p-table>
+                        </div>
+                    </div>
+                </p-tabpanel>
+                <p-tabpanel value="gamepad">
+                    <div>
+                        <p>You can control the vehicle by connecting a gamepad.</p>
+
+                        <div class="m-2">
+                            <p-checkbox inputId="enableGamepad" [(ngModel)]="gamepadEnabled" binary></p-checkbox>
+                            <label for="enableGamepad" class="ml-2">Enable gamepad input</label>
+                        </div>
+
+                        <p-button size="small">Detect gamepad</p-button>
+
+                        <div class="mt-8 ml-4">
+                            <p-table [value]="gamepadBindings()">
+                                <ng-template #header>
+                                    <tr>
+                                        <th>Type</th>
+                                        <th>Index</th>
+                                        <th>Parameter</th>
+                                    </tr>
+                                </ng-template>
+                                <ng-template #body let-input>
+                                    <tr>
+                                        <td>{{ input.type }}</td>
+                                        <td>{{ input.index }}</td>
+                                        <td>{{ input.param }}</td>
+                                    </tr>
+                                </ng-template>
+                            </p-table>
+                        </div>
+                    </div>
+                </p-tabpanel>
+            </p-tabpanels>
+        </p-tabs>
+    </div>
+    }
+</p-dialog>
