@@ -26,34 +26,14 @@ class Car(Entity):
             parent=camera.ui,
             position = (0,0),
         )
-        self.held_keys = set()
 
     def update(self):
         self.hud.scale=(window.aspect_ratio, 1)
 
-        # Acceleration / braking
-        if 'w' in self.held_keys:
-            self.speed += self.acceleration * time.dt
-        if 's' in self.held_keys:
-            self.speed -= self.acceleration * time.dt
-
         # Clamp speed
         self.speed = clamp(self.speed, -self.max_speed / 2, self.max_speed)
 
-        # Friction
-        if 'w' not in self.held_keys and 's' not in self.held_keys:
-            if self.speed > 0:
-                self.speed -= self.friction * time.dt
-            if self.speed < 0:
-                self.speed += self.friction * time.dt
-        if abs(self.speed) < 0.2:
-            self.speed = 0
-
-        # Steering
-        if 'd' in self.held_keys:
-            self.rotation_y += self.turn_speed * time.dt * (self.speed / self.max_speed)
-        if 'a' in self.held_keys:
-            self.rotation_y -= self.turn_speed * time.dt * (self.speed / self.max_speed)
+        self.rotation_y += self.turn_speed * time.dt * (self.speed / self.max_speed)
 
         move_vector = self.forward * self.speed * time.dt
         self.position += move_vector
@@ -167,7 +147,9 @@ class Game:
         self.app.run()
 
     def ping(self, msg: str):
-        self.car.held_keys = set(json.loads(msg))
+        d = json.loads(msg)
+        self.car.speed = d['speed']
+        self.car.turn_speed = d['angle']
 
 if __name__ == "__main__":
     game = Game()

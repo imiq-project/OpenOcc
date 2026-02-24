@@ -27,6 +27,12 @@
         <ng-template #header>
             <div>{{ rtcStatus().vehicle?.name }}</div>
         </ng-template>
+        @if (gamepadIndex() === null) {
+            <p>
+                You configured a gamepad.
+                Connect it and press any button to use it.
+            </p>
+        }
         <div style="width: 600px; height: 400px;">
             <video #remoteVideo style="width: 100%; height: 100%; object-fit: contain;" muted autoplay
                 playsinline></video>

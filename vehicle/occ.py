@@ -105,8 +105,6 @@ class OccClient:
                 logging.info("Connection closed")
                 self._rtc_connection = None
 
-        # TODO: onicecandiate
-
         @self._rtc_connection.on("datachannel")
         def on_datachannel(channel: RTCDataChannel):
             logging.info(f"Data channel received: {channel.label}")

@@ -16,10 +16,12 @@ export class WebRtcStatus {
     ) { }
 }
 
+type PingCallback = ()=>string;
+
 class Connection {
     constructor(
         public rtc: RTCPeerConnection,
-        public ping: string,
+        public pingCallback: PingCallback,
         public pingTimer: number = 0,
     ) { }
 }
@@ -36,15 +38,7 @@ export class WebRtcService implements OnDestroy {
         return this.status$.asObservable();
     }
 
-    setPing(value: string) {
-        if (!this.connection) {
-            console.error("Cannot set ping: no active connetion")
-            return
-        }
-        this.connection.ping = value
-    }
-
-    async start(occId: string, vehicle: Vehicle, targetEl: HTMLVideoElement, initialPing: string) {
+    async start(occId: string, vehicle: Vehicle, targetEl: HTMLVideoElement, getPingCallback: PingCallback) {
         if (this.connection) {
             console.error("Cannot start WebRTC: connection already exists")
             return
@@ -55,7 +49,7 @@ export class WebRtcService implements OnDestroy {
                 { urls: "stun:stun.l.google.com:19302" },
             ]
         })
-        this.connection = new Connection(rtc, initialPing)
+        this.connection = new Connection(rtc, getPingCallback)
         rtc.addTransceiver('video');
         const dc = rtc.createDataChannel("ping", {
             ordered: false,
@@ -63,8 +57,8 @@ export class WebRtcService implements OnDestroy {
         })
         dc.onopen = () => {
             this.connection!.pingTimer = setInterval(() => {
-                dc.send(this.connection!.ping)
-            }, 500)
+                dc.send(this.connection!.pingCallback())
+            }, 50)
         }
 
         rtc.onicecandidate = async (e: RTCPeerConnectionIceEvent) => {

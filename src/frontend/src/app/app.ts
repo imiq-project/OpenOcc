@@ -15,6 +15,7 @@ import { ButtonModule } from 'primeng/button';
 import { DialogModule } from 'primeng/dialog';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { ConfigDialog } from './config-dialog/config-dialog';
+import { GamepadService } from '../lib/gamepad.service';
 
 @Component({
   selector: 'app-root',
@@ -26,7 +27,8 @@ export class App implements OnInit, OnDestroy {
   RtcState = RtcState // expose to template
   vehicles = signal<Vehicle[]>([]);
   rtcStatus = signal<RtcStatus>(new RtcStatus(RtcState.Disconnected))
-  vehicleToConfigure = signal<Vehicle|null>(null)
+  vehicleToConfigure = signal<Vehicle | null>(null)
+  gamepadIndex = signal<number | null>(null)
 
   subs = new Subscription();
 
@@ -36,6 +38,7 @@ export class App implements OnInit, OnDestroy {
   constructor(
     private webTransport: WebTransportService,
     private webRtc: WebRtcService,
+    private gamepadService: GamepadService,
     private toastService: MessageService) {
   }
 
@@ -66,6 +69,21 @@ export class App implements OnInit, OnDestroy {
         this.rtcStatus.set(status)
       })
     )
+
+    this.subs.add(
+      this.gamepadService.connected.subscribe((gamepad) => {
+        this.toastService.add({ detail: `Gamepad "${gamepad.id}" connected`, severity: "success" })
+        this.gamepadIndex.set(gamepad.index)
+      })
+    )
+
+    this.subs.add(
+      this.gamepadService.disconnected.subscribe((gamepad) => {
+        this.toastService.add({ detail: `Gamepad "${gamepad.id}" disconnected`, severity: "error" })
+        this.gamepadIndex.set(null)
+      })
+    )
+
   }
 
   ngOnDestroy() {
@@ -73,25 +91,41 @@ export class App implements OnInit, OnDestroy {
   }
 
   startTeleop(vehicle: Vehicle) {
-    this.webRtc.start(this.webTransport.occId, vehicle, this.remoteVideo.nativeElement, '[]')
+    this.webRtc.start(this.webTransport.occId, vehicle, this.remoteVideo.nativeElement, () => this.getPingPayload())
   }
 
   stopTeleop() {
     this.webRtc.stop()
   }
 
+  getPingPayload() {
+    let d, idx = this.gamepadIndex()
+    if (idx !== null) {
+      const g = navigator.getGamepads()[idx]
+      if (g === null) {
+        // TODO
+        return '{}'
+      }
+      // console.log(g.axes)
+      // 2: rückwärts
+      // 0: lenkrad
+      // 5: gas
+      d = {
+        speed: (g.axes[5] + 1) * -10 * Math.sign(g.axes[2]),
+        angle: g.axes[0] * 20
+      }
+    } else {
+      d = Array.from(this.pressedKeys.keys())
+    }
+    return JSON.stringify(d)
+  }
+
   private pressedKeys = new Set<string>()
   keydown(event: KeyboardEvent) {
     this.pressedKeys.add(event.key)
-    if(this.rtcStatus().state == RtcState.Connected) {
-      this.webRtc.setPing(JSON.stringify(Array.from(this.pressedKeys.keys())))
-    }
   }
 
   keyup(event: KeyboardEvent) {
     this.pressedKeys.delete(event.key)
-    if(this.rtcStatus().state == RtcState.Connected) {
-      this.webRtc.setPing(JSON.stringify(Array.from(this.pressedKeys.keys())))
-    }
   }
 }
