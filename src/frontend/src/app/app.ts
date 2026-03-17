@@ -99,25 +99,39 @@ export class App implements OnInit, OnDestroy {
   }
 
   getPingPayload() {
-    let d, idx = this.gamepadIndex()
+    let idx = this.gamepadIndex()
+    let speed = 0, angle = 0
     if (idx !== null) {
       const g = navigator.getGamepads()[idx]
       if (g === null) {
         // TODO
-        return '{}'
-      }
-      // console.log(g.axes)
-      // 2: rückwärts
-      // 0: lenkrad
-      // 5: gas
-      d = {
-        speed: (g.axes[5] + 1) * -10 * Math.sign(g.axes[2]),
-        angle: g.axes[0] * 20
+        console.error("Gamepad null!")
+      } else {
+        // console.log(g.axes)
+        // 2: rückwärts
+        // 0: lenkrad
+        // 5: gas
+        speed = (g.axes[5] + 1) * -10 * Math.sign(g.axes[2]),
+        angle = g.axes[0] * 20
       }
     } else {
-      d = Array.from(this.pressedKeys.keys())
+      if(this.pressedKeys.has('w')) {
+        speed = 20
+      }
+      if(this.pressedKeys.has('s')) {
+        speed = -20
+      }
+      if(this.pressedKeys.has('a')) {
+        angle = -20
+      }
+      if(this.pressedKeys.has('d')) {
+        angle = +20
+      }
     }
-    return JSON.stringify(d)
+    return JSON.stringify({
+      speed: speed,
+      angle: angle,
+    })
   }
 
   private pressedKeys = new Set<string>()
