@@ -16,7 +16,7 @@ export class WebRtcStatus {
     ) { }
 }
 
-type PingCallback = ()=>string;
+type PingCallback = () => string;
 
 class Connection {
     constructor(
@@ -46,8 +46,30 @@ export class WebRtcService implements OnDestroy {
         console.log("Starting WebRTC for", vehicle.id)
         const rtc = new RTCPeerConnection({
             iceServers: [
-                { urls: "stun:stun.l.google.com:19302" },
-            ]
+                {
+                    urls: "stun:stun.relay.metered.ca:80",
+                },
+                {
+                    urls: "turn:global.relay.metered.ca:80",
+                    username: "7e3825a0cbf33ede91e4c977",
+                    credential: "1PsnqW7+TZspLryk",
+                },
+                {
+                    urls: "turn:global.relay.metered.ca:80?transport=tcp",
+                    username: "7e3825a0cbf33ede91e4c977",
+                    credential: "1PsnqW7+TZspLryk",
+                },
+                {
+                    urls: "turn:global.relay.metered.ca:443",
+                    username: "7e3825a0cbf33ede91e4c977",
+                    credential: "1PsnqW7+TZspLryk",
+                },
+                {
+                    urls: "turns:global.relay.metered.ca:443?transport=tcp",
+                    username: "7e3825a0cbf33ede91e4c977",
+                    credential: "1PsnqW7+TZspLryk",
+                },
+            ],
         })
         this.connection = new Connection(rtc, getPingCallback)
         rtc.addTransceiver('video');
@@ -87,6 +109,7 @@ export class WebRtcService implements OnDestroy {
                 case "closed":
                 case "disconnected":
                 case "failed":
+                    this.status$.next(new WebRtcStatus(State.Disconnected, vehicle))
                     break;
                 default:
                     console.error("Unknown state", rtc?.connectionState)
