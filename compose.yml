@@ -6,6 +6,9 @@ services:
     restart: always
     volumes:
       - ./certs:/certs
+    environment:
+      - EXPRESS_TURN_USERNAME=
+      - EXPRESS_TURN_PASSWORD=
     ports:
       - 80:80 # http
       - 443:443/tcp # https

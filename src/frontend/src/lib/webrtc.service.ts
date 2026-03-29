@@ -33,9 +33,16 @@ export class WebRtcService implements OnDestroy {
 
     private connection?: Connection;
     private status$ = new BehaviorSubject<WebRtcStatus>(new WebRtcStatus(State.Disconnected));
+    private iceServers = new Array<RTCIceServer>()
 
     get status(): Observable<WebRtcStatus> {
         return this.status$.asObservable();
+    }
+
+    async fetchIceServers() {
+        const response = await fetch("/iceServers")
+        const data = await response.json()
+        this.iceServers = data['iceServers']
     }
 
     async start(occId: string, vehicle: Vehicle, targetEl: HTMLVideoElement, getPingCallback: PingCallback) {
@@ -44,32 +51,9 @@ export class WebRtcService implements OnDestroy {
             return
         }
         console.log("Starting WebRTC for", vehicle.id)
+        await this.fetchIceServers() // TODO: maybe do earlier?
         const rtc = new RTCPeerConnection({
-            iceServers: [
-                {
-                    urls: "stun:stun.relay.metered.ca:80",
-                },
-                {
-                    urls: "turn:global.relay.metered.ca:80",
-                    username: "7e3825a0cbf33ede91e4c977",
-                    credential: "1PsnqW7+TZspLryk",
-                },
-                {
-                    urls: "turn:global.relay.metered.ca:80?transport=tcp",
-                    username: "7e3825a0cbf33ede91e4c977",
-                    credential: "1PsnqW7+TZspLryk",
-                },
-                {
-                    urls: "turn:global.relay.metered.ca:443",
-                    username: "7e3825a0cbf33ede91e4c977",
-                    credential: "1PsnqW7+TZspLryk",
-                },
-                {
-                    urls: "turns:global.relay.metered.ca:443?transport=tcp",
-                    username: "7e3825a0cbf33ede91e4c977",
-                    credential: "1PsnqW7+TZspLryk",
-                },
-            ],
+            iceServers: this.iceServers
         })
         this.connection = new Connection(rtc, getPingCallback)
         rtc.addTransceiver('video');
@@ -93,6 +77,9 @@ export class WebRtcService implements OnDestroy {
                 method: "POST",
                 body: JSON.stringify({ "Type": "ice", "Candidate": e.candidate.toJSON() })
             })
+        }
+        rtc.onicecandidateerror = (event) => {
+            console.log("onicecandidateerror", event)
         }
         rtc.ontrack = (event) => {
             targetEl.srcObject = event.streams[0];

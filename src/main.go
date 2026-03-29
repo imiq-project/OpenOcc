@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/quic-go/quic-go"
@@ -44,7 +45,17 @@ func AltSvc(h3Port string) func(http.Handler) http.Handler {
 	}
 }
 
+func GetEnvOrPanic(key string) string {
+	value, exists := os.LookupEnv(key)
+	if !exists {
+		panic(key + " is not set")
+	}
+	return value
+}
+
 func main() {
+	express_turn_user := GetEnvOrPanic("EXPRESS_TURN_USERNAME")
+	express_turn_pass := GetEnvOrPanic("EXPRESS_TURN_PASSWORD")
 
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
@@ -133,6 +144,43 @@ func main() {
 	mux.Handle("/static/", http.StripPrefix("/static/", fs))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "./frontend/dist/frontend/browser/index.html")
+	})
+
+	// ICE Servers
+	mux.HandleFunc("/iceServers", func(w http.ResponseWriter, r *http.Request) {
+		type ICECredential struct {
+			URLs       []string `json:"urls"`
+			Username   string   `json:"username"`
+			Credential string   `json:"credential"`
+		}
+		type Response struct {
+			IceServers []ICECredential `json:"iceServers"`
+		}
+
+		response := Response{
+			IceServers: []ICECredential{
+				ICECredential{
+					URLs: []string{
+						"stun:stun.l.google.com:19302",
+					},
+					Username:   "",
+					Credential: "",
+				},
+				ICECredential{
+					URLs: []string{
+						"turn:free.expressturn.com:3478?transport=udp",
+						"turn:free.expressturn.com:3478?transport=tcp",
+						"turns:free.expressturn.com:5349",
+					},
+					Username:   express_turn_user,
+					Credential: express_turn_pass, // TODO: generate time-limited credential
+				},
+			},
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(response)
 	})
 
 	vehicleBroker := NewWebTransportBroker()

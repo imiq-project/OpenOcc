@@ -2,9 +2,7 @@ import argparse
 import asyncio
 import json
 import logging
-import av
-import logging
-from dataclasses import dataclass
+import requests
 from typing import List, Optional
 from abc import ABC, abstractmethod
 
@@ -16,8 +14,7 @@ from aiortc import (
     MediaStreamTrack,
     RTCDataChannel,
 )
-from aiortc.rtcicetransport import candidate_from_aioice
-from aioice import Candidate
+from aiortc.sdp import candidate_from_sdp
 from aiortc.contrib.media import MediaPlayer
 from webtransport import WebTransportClient
 
@@ -38,14 +35,33 @@ class OccClient:
     def __init__(
         self, host: str, port: int, path: str, insecure: bool, vehicle: Vehicle
     ) -> None:
+        self._host = host
+        self._port = port
+        self._insecure = insecure
         self._webtransport = WebTransportClient(host, port, path, insecure)
         self._vehicle = vehicle
         self._rtc_connection: Optional[RTCPeerConnection] = None
+        self._ice_servers: List[RTCIceServer] = []
 
     async def loop(self):
+        self.fetch_ice_servers()
         asyncio.create_task(self._process_datagram())
         asyncio.create_task(self._process_stream())
         await self._webtransport.loop()
+
+    def fetch_ice_servers(self):
+        response = requests.get(
+            f"https://{self._host}:{self._port}/iceServers", verify=not self._insecure
+        )
+        response.raise_for_status()
+        data = response.json()["iceServers"]
+        assert isinstance(data, list)
+        self._ice_servers = [
+            RTCIceServer(
+                urls=i["urls"], username=i["username"], credential=i["credential"]
+            )
+            for i in data
+        ]
 
     def _send_stream(self, message: dict):
         # TODO: ensure that message does not contain \0 already
@@ -90,12 +106,9 @@ class OccClient:
         if self._rtc_connection:
             logging.error("Cannot process offer: WebRTC connection already established")
             return
+
         self._rtc_connection = RTCPeerConnection(
-            RTCConfiguration(
-                iceServers=[
-                    RTCIceServer(urls=["stun:stun.l.google.com:19302"]),
-                ]
-            )
+            RTCConfiguration(iceServers=self._ice_servers)
         )
 
         @self._rtc_connection.on("connectionstatechange")
@@ -104,6 +117,13 @@ class OccClient:
             if self._rtc_connection.connectionState in ["closed", "failed"]:
                 logging.info("Connection closed")
                 self._rtc_connection = None
+
+        @self._rtc_connection.on("icecandidate")
+        async def on_icecandidate(candidate):
+            if candidate is None:
+                # ICE gathering finished
+                return
+            raise Exception("Trickle ICE not expected!")
 
         @self._rtc_connection.on("datachannel")
         def on_datachannel(channel: RTCDataChannel):
@@ -127,9 +147,14 @@ class OccClient:
         answer = await self._rtc_connection.createAnswer()
         assert answer.type == "answer"
         await self._rtc_connection.setLocalDescription(answer)
+        assert self._rtc_connection.iceGatheringState == "complete"
         logging.info("Sending answer")
         self._send_stream(
-            {"Type": "answer", "Sdp": answer.sdp, "Recipient": connected_occ}
+            {
+                "Type": "answer",
+                "Sdp": self._rtc_connection.localDescription.sdp,
+                "Recipient": connected_occ,
+            }
         )
 
     async def _process_ice(self, ice: dict):
@@ -137,22 +162,27 @@ class OccClient:
             logging.error("Cannot process ice candidate: no offer received")
             return
         logging.info("New ice candidate")
-        c = ice["Candidate"]
-        assert isinstance(c, dict)
-        try:
-            candidate = candidate_from_aioice(Candidate.from_sdp(c["candidate"]))
-        except ValueError as e:
-            logging.error(f"Invalid candiate: {e}")
+        payload = ice["Candidate"]
+        assert isinstance(payload, dict)
+        sdp = payload["candidate"]
+        if not sdp:
+            logging.warning("Discarding empty candidate")
             return
-        candidate.sdpMid = c.get("sdpMid")
-        candidate.sdpMLineIndex = c.get("sdpMLineIndex")
+
+        try:
+            candidate = candidate_from_sdp(sdp)
+        except ValueError as e:
+            logging.error(f"Invalid candidate: {e}")
+            return
+        candidate.sdpMid = payload.get("sdpMid")
+        candidate.sdpMLineIndex = payload.get("sdpMLineIndex")
         await self._rtc_connection.addIceCandidate(candidate)
 
 
 async def main():
     logging.basicConfig(
         level=logging.INFO,
-        format="%(asctime)s - %(module)s - %(levelname)s - %(message)s",
+        format="%(module)s - %(levelname)s - %(message)s",
     )
 
     parser = argparse.ArgumentParser()
