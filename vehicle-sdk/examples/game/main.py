@@ -1,26 +1,13 @@
 from typing import List
+
+from av.frame import Frame
 from game import Game
 from openocc.client import OccClient, Vehicle
 import threading
 import logging
 import argparse
 import asyncio
-from aiortc import MediaStreamTrack, VideoStreamTrack
 import av
-
-class GameStreamTrack(VideoStreamTrack):
-
-    def __init__(self, game: Game):
-        super().__init__()
-        self.game = game
-
-    async def recv(self):
-        pts, time_base = await self.next_timestamp()
-        np_image = self.game.get_window_frame()
-        frame = av.VideoFrame.from_ndarray(np_image, format="bgra")
-        frame.pts = pts
-        frame.time_base = time_base
-        return frame
 
 
 def main():
@@ -39,9 +26,10 @@ def main():
     game = Game()
 
     class GameVehicle(Vehicle):
-        def create_streams(self) -> List[MediaStreamTrack]:
-            return [GameStreamTrack(game)]
-        
+        async def get_frame(self):
+            np_image = game.get_window_frame()
+            return av.VideoFrame.from_ndarray(np_image, format="bgra")
+
         def ping(self, msg: str):
             game.ping(msg)
 

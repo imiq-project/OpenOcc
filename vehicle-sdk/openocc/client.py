@@ -1,32 +1,34 @@
-import argparse
 import asyncio
 import json
 import logging
+from av import VideoFrame
 import requests
-from typing import List, Optional
-from abc import ABC, abstractmethod
+from typing import List, Optional, Union
 
 from aiortc import (
     RTCPeerConnection,
     RTCSessionDescription,
     RTCConfiguration,
     RTCIceServer,
-    MediaStreamTrack,
+    VideoStreamTrack,
     RTCDataChannel,
 )
 from aiortc.sdp import candidate_from_sdp
 from openocc.webtransport import WebTransportClient
+from openocc.vehicle import Vehicle
 
 
-class Vehicle(ABC):
+class VehicleVideoStream(VideoStreamTrack):
+    def __init__(self, vehicle: Vehicle) -> None:
+        super().__init__()
+        self.vehicle = vehicle
 
-    @abstractmethod
-    def create_streams(self) -> List[MediaStreamTrack]:
-        pass
-
-    @abstractmethod
-    def ping(self, msg: str):
-        pass
+    async def recv(self):
+        pts, time_base = await self.next_timestamp()
+        frame = await self.vehicle.get_frame()
+        frame.pts = pts
+        frame.time_base = time_base
+        return frame
 
 
 class OccClient:
@@ -135,8 +137,7 @@ class OccClient:
             def on_message(message: str):
                 self._vehicle.ping(message)
 
-        for stream in self._vehicle.create_streams():
-            self._rtc_connection.addTrack(stream)
+        self._rtc_connection.addTrack(VehicleVideoStream(self._vehicle))
 
         connected_occ = offer["OccId"]
         logging.info(f"Received offer from {connected_occ}")

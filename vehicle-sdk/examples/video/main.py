@@ -3,10 +3,13 @@ import argparse
 import asyncio
 
 from aiortc import MediaStreamTrack
-from openocc.client import Vehicle, OccClient
+from av.frame import Frame
+from av.packet import Packet
+from openocc.vehicle import Vehicle
+from openocc.client import OccClient
 
 from aiortc.contrib.media import MediaPlayer
-from typing import List
+
 
 async def main():
     logging.basicConfig(
@@ -22,13 +25,15 @@ async def main():
     args = parser.parse_args()
 
     class DummyVehilce(Vehicle):
-        def create_streams(self) -> List[MediaStreamTrack]:
-            player = MediaPlayer(
+        def __init__(self):
+            self.player = MediaPlayer(
                 "http://download.tsi.telecom-paristech.fr/gpac/dataset/dash/uhd/mux_sources/hevcds_720p30_2M.mp4"
             )
-            assert player.video
-            return [player.video]
-        
+
+        async def get_frame(self) -> Frame | Packet:
+            assert self.player.video
+            return await self.player.video.recv()
+
         def ping(self, msg: str):
             pass
 
