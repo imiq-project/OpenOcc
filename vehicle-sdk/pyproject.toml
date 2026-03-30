@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools >= 77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openocc"
+dynamic = ["version"]
+dependencies = [
+  "aioquic",
+  "aiortc",
+  "ursina",
+  "requests",
+]
+authors = [
+  {name = "Björn Otto", email = "bjoern.otto@ovgu.de"},
+]
+readme = "README.md"
+

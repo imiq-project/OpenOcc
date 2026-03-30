@@ -1,6 +1,6 @@
 from typing import List
 from game import Game
-from occ import OccClient, Vehicle
+from openocc.client import OccClient, Vehicle
 import threading
 import logging
 import argparse
