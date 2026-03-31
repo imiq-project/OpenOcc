@@ -26,10 +26,20 @@ sysctl -w net.core.rmem_max=7500000
 sysctl -w net.core.wmem_max=7500000
 ```
 
-
 # SDK
 
 ```sh
  pip install git+https://github.com/imiq-project/OpenOcc.git@main#subdirectory=vehicle-sdk
 ```
 Requires pip >= 24
+
+
+# Debugging
+
+## WebRTC
+
+In Firefox:
+about:webrtc
+
+In Chrome:
+chrome://webrtc-internals

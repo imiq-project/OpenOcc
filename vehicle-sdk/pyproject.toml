@@ -8,7 +8,6 @@ dynamic = ["version"]
 dependencies = [
   "aioquic",
   "aiortc",
-  "ursina",
   "requests",
 ]
 authors = [
