@@ -16,3 +16,7 @@ authors = [
 ]
 readme = "README.md"
 
+[tool.setuptools.dynamic]
+version = {attr = "openocc.__version__"}
+
+
