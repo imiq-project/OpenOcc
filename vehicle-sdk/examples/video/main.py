@@ -2,7 +2,6 @@ import logging
 import argparse
 import asyncio
 
-from aiortc import MediaStreamTrack
 from av.frame import Frame
 from av.packet import Packet
 from openocc.vehicle import Vehicle
@@ -14,7 +13,7 @@ from aiortc.contrib.media import MediaPlayer
 async def main():
     logging.basicConfig(
         level=logging.INFO,
-        format="%(module)s - %(levelname)s - %(message)s",
+        format="%(module)-10.10s - %(levelname)-8.8s - %(message)s",
     )
 
     parser = argparse.ArgumentParser()
@@ -24,7 +23,7 @@ async def main():
     parser.add_argument("--insecure", action="store_true", default=False)
     args = parser.parse_args()
 
-    class DummyVehilce(Vehicle):
+    class DummyVehicle(Vehicle):
         def __init__(self):
             self.player = MediaPlayer(
                 "http://download.tsi.telecom-paristech.fr/gpac/dataset/dash/uhd/mux_sources/hevcds_720p30_2M.mp4"
@@ -37,7 +36,7 @@ async def main():
         def ping(self, msg: str):
             pass
 
-    client = OccClient(args.host, args.port, args.path, args.insecure, DummyVehilce())
+    client = OccClient(args.host, args.port, args.path, args.insecure, DummyVehicle())
     await client.loop()
 
 

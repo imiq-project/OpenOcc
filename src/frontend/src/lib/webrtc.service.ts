@@ -57,13 +57,17 @@ export class WebRtcService implements OnDestroy {
         })
         this.connection = new Connection(rtc, getPingCallback)
         rtc.addTransceiver('video');
-        const dc = rtc.createDataChannel("ping", {
-            ordered: false,
-            maxRetransmits: 0
+        const commandChannel = rtc.createDataChannel('command', {
+            ordered: true,
         })
-        dc.onopen = () => {
+        commandChannel.onmessage = console.log
+        const pingChannel = rtc.createDataChannel("ping", {
+            ordered: false,
+            maxRetransmits: 0,
+        })
+        pingChannel.onopen = () => {
             this.connection!.pingTimer = setInterval(() => {
-                dc.send(this.connection!.pingCallback())
+                pingChannel.send(this.connection!.pingCallback())
             }, 50)
         }
 

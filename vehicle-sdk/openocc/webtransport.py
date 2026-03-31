@@ -103,6 +103,7 @@ class WebTransportClient:
         self.path = path
         self.insecure = insecure
         self.protocol: Optional[H3ClientProtocol] = None
+        self.connected = asyncio.Future()
 
     async def loop(self):
         config = QuicConfiguration(
@@ -126,11 +127,8 @@ class WebTransportClient:
 
             asyncio.create_task(forward_queue(self.protocol.stream, self.stream))
             asyncio.create_task(forward_queue(self.protocol.datagrams, self.datagrams))
-
-            # Ping to keep connection alive
-            while True:
-                self.protocol.send_datagram(b"")
-                await asyncio.sleep(5)
+            self.connected.set_result(True)
+            await asyncio.Future() # blocks
 
         self.protocol = None
 
@@ -146,7 +144,7 @@ class WebTransportClient:
 async def main():
     logging.basicConfig(
         level=logging.INFO,
-        format="%(asctime)s - %(module)s - %(levelname)s - %(message)s",
+        format="%(module)s - %(levelname)s - %(message)s",
     )
 
     parser = argparse.ArgumentParser()

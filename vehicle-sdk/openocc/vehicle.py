@@ -9,7 +9,3 @@ class Vehicle(ABC):
     @abstractmethod
     async def get_frame(self) -> Union[Frame, Packet]:
         pass
-
-    @abstractmethod
-    def ping(self, msg: str):
-        pass

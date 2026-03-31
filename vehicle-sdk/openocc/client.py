@@ -1,7 +1,6 @@
 import asyncio
 import json
 import logging
-from av import VideoFrame
 import requests
 from typing import List, Optional, Union
 
@@ -16,6 +15,7 @@ from aiortc import (
 from aiortc.sdp import candidate_from_sdp
 from openocc.webtransport import WebTransportClient
 from openocc.vehicle import Vehicle
+from openocc.ioconf import IoConf
 
 
 class VehicleVideoStream(VideoStreamTrack):
@@ -43,12 +43,20 @@ class OccClient:
         self._vehicle = vehicle
         self._rtc_connection: Optional[RTCPeerConnection] = None
         self._ice_servers: List[RTCIceServer] = []
+        self._io_conf = IoConf(vehicle)
 
     async def loop(self):
         self.fetch_ice_servers()
         asyncio.create_task(self._process_datagram())
         asyncio.create_task(self._process_stream())
-        await self._webtransport.loop()
+        asyncio.create_task(self._webtransport.loop())
+        await self._webtransport.connected
+        logging.info("WebTransport connected")
+        self._send_stream({
+            "Type": "ioconf",
+            "Conf": self._io_conf.to_json(),
+        })
+        await self._send_outgoing()
 
     def fetch_ice_servers(self):
         response = requests.get(
@@ -63,12 +71,19 @@ class OccClient:
             )
             for i in data
         ]
+        logging.info(f"Fetched {len(self._ice_servers)} ICE servers")
 
     def _send_stream(self, message: dict):
         # TODO: ensure that message does not contain \0 already
         data = json.dumps(message).encode()
         data += b"\0"  # delimiter
         self._webtransport.send_stream(data)
+
+    async def _send_outgoing(self):
+        while True:
+            await asyncio.sleep(5)
+            data = self._io_conf.get_outgoing([])
+            self._webtransport.send_datagram(json.dumps(data).encode())
 
     async def _process_stream(self):
         buffer = bytearray()
@@ -129,13 +144,15 @@ class OccClient:
         @self._rtc_connection.on("datachannel")
         def on_datachannel(channel: RTCDataChannel):
             logging.info(f"Data channel received: {channel.label}")
-            if channel.label != "ping":
+            if channel.label == "ping":
+                @channel.on("message")
+                def on_message(message: str):
+                    self._vehicle.ping(message)
+            elif channel.label == "command":
+                
+            else:
                 logging.error("Invalid channel id")
                 return
-
-            @channel.on("message")
-            def on_message(message: str):
-                self._vehicle.ping(message)
 
         self._rtc_connection.addTrack(VehicleVideoStream(self._vehicle))
 

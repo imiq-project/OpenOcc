@@ -146,10 +146,11 @@ class Game:
     def run(self):
         self.app.run()
 
-    def ping(self, msg: str):
-        d = json.loads(msg)
-        self.car.speed = d['speed']
-        self.car.turn_speed = d['angle']
+    def set_car_speed(self, speed):
+        self.car.speed = speed
+
+    def set_car_angle(self, angle):
+        self.car.turn_speed = angle
 
 if __name__ == "__main__":
     game = Game()
