@@ -1,6 +1,7 @@
 import { Injectable, OnDestroy } from '@angular/core';
 import { BehaviorSubject, Observable, Subject } from 'rxjs';
 import { Vehicle } from '../model/vehicle';
+import { WebRtcService } from './webrtc.service';
 
 
 @Injectable({
@@ -13,7 +14,7 @@ export class WebTransportService implements OnDestroy {
   private answerMessages$ = new Subject<object>();
   occId = "occ_" + Math.floor(Math.random() * 100000)
 
-  constructor() {
+  constructor(private webRtcService: WebRtcService) {
     this.connect()
   }
 
@@ -91,6 +92,9 @@ export class WebTransportService implements OnDestroy {
               case "answer":
                 this.answerMessages$.next(data)
                 break
+              case "iceServers":
+                this.webRtcService.setIceServers(data["iceServers"])
+                break;
               default:
                 console.error(`Unknown message ${type}`)
                 break;

@@ -104,6 +104,7 @@ class WebTransportClient:
         self.insecure = insecure
         self.protocol: Optional[H3ClientProtocol] = None
         self.connected = asyncio.Future()
+        self._stop_event = asyncio.Event()
 
     async def loop(self):
         config = QuicConfiguration(
@@ -128,9 +129,12 @@ class WebTransportClient:
             asyncio.create_task(forward_queue(self.protocol.stream, self.stream))
             asyncio.create_task(forward_queue(self.protocol.datagrams, self.datagrams))
             self.connected.set_result(True)
-            await asyncio.Future() # blocks
+            await self._stop_event.wait()
 
         self.protocol = None
+
+    def stop(self):
+        self._stop_event.set()
 
     def send_datagram(self, datagram: bytes):
         assert self.protocol

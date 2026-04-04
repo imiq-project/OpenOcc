@@ -46,32 +46,18 @@ class OccClient:
         self._io_conf = IoConf(vehicle)
 
     async def loop(self):
-        self.fetch_ice_servers()
         asyncio.create_task(self._process_datagram())
         asyncio.create_task(self._process_stream())
         asyncio.create_task(self._webtransport.loop())
         await self._webtransport.connected
         logging.info("WebTransport connected")
-        self._send_stream({
-            "Type": "ioconf",
-            "Conf": self._io_conf.to_json(),
-        })
+        # self._send_stream(
+        #     {
+        #         "Type": "ioconf",
+        #         "Conf": self._io_conf.to_json(),
+        #     }
+        # )
         await self._send_outgoing()
-
-    def fetch_ice_servers(self):
-        response = requests.get(
-            f"https://{self._host}:{self._port}/iceServers", verify=not self._insecure
-        )
-        response.raise_for_status()
-        data = response.json()["iceServers"]
-        assert isinstance(data, list)
-        self._ice_servers = [
-            RTCIceServer(
-                urls=i["urls"], username=i["username"], credential=i["credential"]
-            )
-            for i in data
-        ]
-        logging.info(f"Fetched {len(self._ice_servers)} ICE servers")
 
     def _send_stream(self, message: dict):
         # TODO: ensure that message does not contain \0 already
@@ -109,14 +95,27 @@ class OccClient:
             logging.error(f"Received invalid message: {e}")
             return
         assert isinstance(data, dict)
-        logging.info("Received stream msg")
         type_ = data.get("Type")
+        logging.info(f"Received stream msg '{type_}'")
         if type_ == "offer":
             await self._process_offer(data)
-        elif type_ == "ice":
-            await self._process_ice(data)
+        elif type_ == "iceCandidate":
+            await self._process_ice_candidate(data)
+        elif type_ == "iceServers":
+            self._process_ice_servers(data)
         else:
             logging.error(f"Received message with unknown type {type_}")
+
+    def _process_ice_servers(self, data: dict):
+        servers = data['iceServers']
+        assert isinstance(servers, list)
+        self._ice_servers = [
+            RTCIceServer(
+                urls=i["urls"], username=i["username"], credential=i["credential"]
+            )
+            for i in servers
+        ]
+        logging.info(f"Received {len(self._ice_servers)} ICE servers")
 
     async def _process_offer(self, offer: dict):
         if self._rtc_connection:
@@ -145,11 +144,13 @@ class OccClient:
         def on_datachannel(channel: RTCDataChannel):
             logging.info(f"Data channel received: {channel.label}")
             if channel.label == "ping":
+
                 @channel.on("message")
                 def on_message(message: str):
                     self._vehicle.ping(message)
+
             elif channel.label == "command":
-                
+                pass
             else:
                 logging.error("Invalid channel id")
                 return
@@ -174,7 +175,7 @@ class OccClient:
             }
         )
 
-    async def _process_ice(self, ice: dict):
+    async def _process_ice_candidate(self, ice: dict):
         if self._rtc_connection is None:
             logging.error("Cannot process ice candidate: no offer received")
             return

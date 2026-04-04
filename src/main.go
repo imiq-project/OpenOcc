@@ -53,9 +53,45 @@ func GetEnvOrPanic(key string) string {
 	return value
 }
 
+func icdServers(expressTurnUser string, expressTurnPass string) []byte {
+	type ICECredential struct {
+		URLs       []string `json:"urls"`
+		Username   string   `json:"username"`
+		Credential string   `json:"credential"`
+	}
+	type ServersMessage struct {
+		Type       string
+		IceServers []ICECredential `json:"iceServers"`
+	}
+
+	msg := ServersMessage{
+		Type: "iceServers",
+		IceServers: []ICECredential{
+			ICECredential{
+				URLs: []string{
+					"stun:stun.l.google.com:19302",
+				},
+				Username:   "",
+				Credential: "",
+			},
+			ICECredential{
+				URLs: []string{
+					"turn:free.expressturn.com:3478?transport=udp",
+					"turn:free.expressturn.com:3478?transport=tcp",
+					"turns:free.expressturn.com:5349",
+				},
+				Username:   expressTurnUser,
+				Credential: expressTurnPass, // TODO: generate time-limited credential
+			},
+		},
+	}
+	iceMessage, _ := json.Marshal(msg)
+	return iceMessage
+}
+
 func main() {
-	express_turn_user := GetEnvOrPanic("EXPRESS_TURN_USERNAME")
-	express_turn_pass := GetEnvOrPanic("EXPRESS_TURN_PASSWORD")
+	expressTurnUser := GetEnvOrPanic("EXPRESS_TURN_USERNAME")
+	expressTurnPass := GetEnvOrPanic("EXPRESS_TURN_PASSWORD")
 
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
@@ -146,43 +182,6 @@ func main() {
 		http.ServeFile(w, r, "./frontend/dist/frontend/browser/index.html")
 	})
 
-	// ICE Servers
-	mux.HandleFunc("/iceServers", func(w http.ResponseWriter, r *http.Request) {
-		type ICECredential struct {
-			URLs       []string `json:"urls"`
-			Username   string   `json:"username"`
-			Credential string   `json:"credential"`
-		}
-		type Response struct {
-			IceServers []ICECredential `json:"iceServers"`
-		}
-
-		response := Response{
-			IceServers: []ICECredential{
-				ICECredential{
-					URLs: []string{
-						"stun:stun.l.google.com:19302",
-					},
-					Username:   "",
-					Credential: "",
-				},
-				ICECredential{
-					URLs: []string{
-						"turn:free.expressturn.com:3478?transport=udp",
-						"turn:free.expressturn.com:3478?transport=tcp",
-						"turns:free.expressturn.com:5349",
-					},
-					Username:   express_turn_user,
-					Credential: express_turn_pass, // TODO: generate time-limited credential
-				},
-			},
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(response)
-	})
-
 	vehicleBroker := NewWebTransportBroker()
 
 	// Serve webtransport for vehicles
@@ -205,8 +204,6 @@ func main() {
 	}
 
 	occBroker := NewWebTransportBroker()
-	statusMessage, _ := json.Marshal(StatusMsg{"status", vehicles})
-	occBroker.updateStatus(statusMessage)
 
 	// Serve webtransport for control centers
 	mux.HandleFunc("/wt-occ", func(w http.ResponseWriter, r *http.Request) {
@@ -244,14 +241,15 @@ func main() {
 				vehicle := findVehicle(id, vehicles)
 				// TODO nil
 				vehicle.Connected = true
+				vehicleBroker.sendMessage(id, icdServers(expressTurnUser, expressTurnPass))
 				statusMessage, _ := json.Marshal(StatusMsg{"status", vehicles})
-				occBroker.updateStatus(statusMessage)
+				occBroker.broadcast("", statusMessage)
 			case id := <-vehicleBroker.Disconnected:
 				vehicle := findVehicle(id, vehicles)
 				// TODO nil
 				vehicle.Connected = false
 				statusMessage, _ := json.Marshal(StatusMsg{"status", vehicles})
-				occBroker.updateStatus(statusMessage)
+				occBroker.broadcast("", statusMessage)
 			case msg := <-vehicleBroker.Messages:
 				result := IncomingMsg{}
 				err := json.Unmarshal(msg.Payload, &result)
@@ -260,7 +258,10 @@ func main() {
 				}
 				occBroker.sendMessage(result.Recipient, msg.Payload)
 			case <-vehicleBroker.Datagrams:
-			case <-occBroker.Connected:
+			case id := <-occBroker.Connected:
+				statusMessage, _ := json.Marshal(StatusMsg{"status", vehicles})
+				occBroker.sendMessage(id, statusMessage)
+				occBroker.sendMessage(id, icdServers(expressTurnUser, expressTurnPass))
 			case <-occBroker.Disconnected:
 			case <-occBroker.Messages:
 			case <-occBroker.Datagrams:

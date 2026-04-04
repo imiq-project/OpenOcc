@@ -39,10 +39,9 @@ export class WebRtcService implements OnDestroy {
         return this.status$.asObservable();
     }
 
-    async fetchIceServers() {
-        const response = await fetch("/iceServers")
-        const data = await response.json()
-        this.iceServers = data['iceServers']
+    setIceServers(servers: Array<RTCIceServer>) {
+        this.iceServers = servers
+        console.log(`Updated ICE servers, got ${servers.length} servers`)
     }
 
     async start(occId: string, vehicle: Vehicle, targetEl: HTMLVideoElement, getPingCallback: PingCallback) {
@@ -51,7 +50,6 @@ export class WebRtcService implements OnDestroy {
             return
         }
         console.log("Starting WebRTC for", vehicle.id)
-        await this.fetchIceServers() // TODO: maybe do earlier?
         const rtc = new RTCPeerConnection({
             iceServers: this.iceServers
         })
@@ -79,7 +77,7 @@ export class WebRtcService implements OnDestroy {
             console.log("New ice candidate", e.candidate)
             await fetch(`/send?Recipient=${vehicle.id}`, {
                 method: "POST",
-                body: JSON.stringify({ "Type": "ice", "Candidate": e.candidate.toJSON() })
+                body: JSON.stringify({ "Type": "iceCandidate", "Candidate": e.candidate.toJSON() })
             })
         }
         rtc.onicecandidateerror = (event) => {
