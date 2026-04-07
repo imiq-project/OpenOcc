@@ -1,5 +1,5 @@
 from game import Game
-from openocc.client import OccClient, Vehicle
+from openocc.client import VehicleClient, Vehicle
 from openocc.ioconf import incoming, DataType
 import threading
 import logging
@@ -36,7 +36,7 @@ def main():
         def set_angle(self, value):
             game.set_car_angle(value)
 
-    client = OccClient(args.host, args.port, args.path, args.insecure, GameVehicle())
+    client = VehicleClient(args.host, args.port, args.path, args.insecure, GameVehicle())
 
     t = threading.Thread(target=lambda: asyncio.run(client.loop()))
     t.start()

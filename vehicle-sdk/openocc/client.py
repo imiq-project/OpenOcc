@@ -1,8 +1,8 @@
 import asyncio
 import json
 import logging
-import requests
-from typing import List, Optional, Union
+import random
+from typing import List, Optional
 
 from aiortc import (
     RTCPeerConnection,
@@ -15,7 +15,8 @@ from aiortc import (
 from aiortc.sdp import candidate_from_sdp
 from openocc.webtransport import WebTransportClient
 from openocc.vehicle import Vehicle
-from openocc.ioconf import IoConf
+from openocc.operator import Operator
+from openocc.ioconf import IoConf, io_conf_for
 
 
 class VehicleVideoStream(VideoStreamTrack):
@@ -31,32 +32,25 @@ class VehicleVideoStream(VideoStreamTrack):
         return frame
 
 
-class OccClient:
+class VehicleClient:
 
-    def __init__(
-        self, host: str, port: int, path: str, insecure: bool, vehicle: Vehicle
-    ) -> None:
+    def __init__(self, host: str, port: int, insecure: bool, vehicle: Vehicle) -> None:
         self._host = host
         self._port = port
         self._insecure = insecure
-        self._webtransport = WebTransportClient(host, port, path, insecure)
         self._vehicle = vehicle
+        self._io_conf = io_conf_for(vehicle)
+        path = f"/wt-vehicle?VehicleId={vehicle.VEHICLE_ID}&IoConf={json.dumps(self._io_conf.to_json())}"
+        self._webtransport = WebTransportClient(host, port, path, insecure)
         self._rtc_connection: Optional[RTCPeerConnection] = None
         self._ice_servers: List[RTCIceServer] = []
-        self._io_conf = IoConf(vehicle)
 
     async def loop(self):
         asyncio.create_task(self._process_datagram())
         asyncio.create_task(self._process_stream())
         asyncio.create_task(self._webtransport.loop())
-        await self._webtransport.connected
+        await self._webtransport.connected.wait()
         logging.info("WebTransport connected")
-        # self._send_stream(
-        #     {
-        #         "Type": "ioconf",
-        #         "Conf": self._io_conf.to_json(),
-        #     }
-        # )
         await self._send_outgoing()
 
     def _send_stream(self, message: dict):
@@ -68,7 +62,7 @@ class OccClient:
     async def _send_outgoing(self):
         while True:
             await asyncio.sleep(5)
-            data = self._io_conf.get_outgoing([])
+            data = self._io_conf.get_outgoing(self._vehicle, [])
             self._webtransport.send_datagram(json.dumps(data).encode())
 
     async def _process_stream(self):
@@ -107,7 +101,7 @@ class OccClient:
             logging.error(f"Received message with unknown type {type_}")
 
     def _process_ice_servers(self, data: dict):
-        servers = data['iceServers']
+        servers = data["iceServers"]
         assert isinstance(servers, list)
         self._ice_servers = [
             RTCIceServer(
@@ -195,3 +189,89 @@ class OccClient:
         candidate.sdpMid = payload.get("sdpMid")
         candidate.sdpMLineIndex = payload.get("sdpMLineIndex")
         await self._rtc_connection.addIceCandidate(candidate)
+
+
+class OperatorClient:
+
+    def __init__(
+        self, host: str, port: int, insecure: bool, operator: Operator
+    ) -> None:
+        self._host = host
+        self._port = port
+        self._insecure = insecure
+        self._operator = operator
+        self._operator_id = random.randint(0, 10**4)
+        path = f"/wt-operator?OccId={self._operator_id}"
+        self._webtransport = WebTransportClient(host, port, path, insecure)
+        self._rtc_connection: Optional[RTCPeerConnection] = None
+        self._ice_servers: List[RTCIceServer] = []
+
+    async def loop(self):
+        asyncio.create_task(self._process_datagram())
+        asyncio.create_task(self._process_stream())
+        asyncio.create_task(self._webtransport.loop())
+        await self._webtransport.connected.wait()
+        logging.info("WebTransport connected")
+        await self._send_outgoing()
+
+    def _send_stream(self, message: dict):
+        # TODO: ensure that message does not contain \0 already
+        data = json.dumps(message).encode()
+        data += b"\0"  # delimiter
+        self._webtransport.send_stream(data)
+
+    async def _send_outgoing(self):
+        while True:
+            await asyncio.sleep(5)
+            self._webtransport.send_datagram(b"")
+
+    async def _process_stream(self):
+        buffer = bytearray()
+        while True:
+            data = await self._webtransport.stream.get()
+            for value in data:
+                if value == 0:
+                    await self._process_stream_message(bytes(buffer))
+                    buffer = bytearray()
+                else:
+                    buffer.append(value)
+
+    async def _process_datagram(self):
+        while True:
+            data = await self._webtransport.datagrams.get()
+            logging.info(f"Received datagram: {len(data)} bytes")
+
+    async def _process_stream_message(self, message):
+        assert isinstance(message, bytes)
+        try:
+            data = json.loads(message.decode())
+        except json.decoder.JSONDecodeError as e:
+            logging.error(f"Received invalid message: {e}")
+            return
+        assert isinstance(data, dict)
+        type_ = data.get("Type")
+        logging.info(f"Received stream msg '{type_}'")
+        if type_ == "iceServers":
+            self._process_ice_servers(data)
+        elif type_ == "status":
+            self._process_status_message(data)
+        else:
+            logging.error(f"Received message with unknown type {type_}")
+
+    def _process_ice_servers(self, data: dict):
+        servers = data["iceServers"]
+        assert isinstance(servers, list)
+        self._ice_servers = [
+            RTCIceServer(
+                urls=i["urls"], username=i["username"], credential=i["credential"]
+            )
+            for i in servers
+        ]
+        logging.info(f"Received {len(self._ice_servers)} ICE servers")
+
+    def _process_status_message(self, data):
+        vehicles = data["Vehicles"]
+        assert isinstance(vehicles, list)
+        for i in vehicles:
+            io_conf = IoConf.from_json(i["IoConf"])
+            self._operator.on_vehicle_changed(i["Id"], i["Name"], i["Connected"], io_conf)

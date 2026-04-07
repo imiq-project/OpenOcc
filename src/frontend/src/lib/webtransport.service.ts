@@ -35,7 +35,7 @@ export class WebTransportService implements OnDestroy {
 
     try {
       console.log("occId=", this.occId)
-      const url = `https://${window.location.host}/wt-occ?OccId=${this.occId}`;
+      const url = `https://${window.location.host}/wt-operator?OccId=${this.occId}`;
       this.transport = new WebTransport(url);
 
       this.transport.closed

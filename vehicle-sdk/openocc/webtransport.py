@@ -103,7 +103,7 @@ class WebTransportClient:
         self.path = path
         self.insecure = insecure
         self.protocol: Optional[H3ClientProtocol] = None
-        self.connected = asyncio.Future()
+        self.connected = asyncio.Event()
         self._stop_event = asyncio.Event()
 
     async def loop(self):
@@ -128,7 +128,7 @@ class WebTransportClient:
 
             asyncio.create_task(forward_queue(self.protocol.stream, self.stream))
             asyncio.create_task(forward_queue(self.protocol.datagrams, self.datagrams))
-            self.connected.set_result(True)
+            self.connected.set()
             await self._stop_event.wait()
 
         self.protocol = None

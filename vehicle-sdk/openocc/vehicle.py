@@ -6,6 +6,8 @@ from typing import Union
 
 class Vehicle(ABC):
 
+    VEHICLE_ID = ""
+
     @abstractmethod
     async def get_frame(self) -> Union[Frame, Packet]:
         pass

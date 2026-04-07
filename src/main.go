@@ -22,7 +22,8 @@ type Vehicle struct {
 	Lat       float32
 	Lon       float32
 	Connected bool
-	key       string // for decryption/encryption of heartbeats
+	token     string
+	IoConf    map[string]any
 }
 
 func findVehicle(id ClientIdType, vehicles []Vehicle) *Vehicle {
@@ -97,9 +98,9 @@ func main() {
 
 	// TODO: store these in a database
 	vehicles := []Vehicle{
-		{"delivery_robot", "Delivery Robot", 52.14103951249229, 11.655338089964646, false, "e59d2738829ff3c344ebf3b904b7156368d604ed76ebe01a81d95d9257962d27"},
-		{"cargo_bike", "Cargo Bike", 52.1402478934974, 11.646169343553602, false, "9847ab2a12410dc9aaf1ece0795932a90bfbf214c5755788930470781d42d797"},
-		{"tugger_train", "Tugger Train", 52.143145559062944, 11.65555937689635, false, "d93947a0684c917a1d2006f382a69695e3b35b4336935e7ce7ca3347ae5b1339"},
+		{"delivery_robot", "Delivery Robot", 52.14103951249229, 11.655338089964646, false, "e59d2738829ff3c344ebf3b904b7156368d604ed76ebe01a81d95d9257962d27", make(map[string]any)},
+		{"cargo_bike", "Cargo Bike", 52.1402478934974, 11.646169343553602, false, "9847ab2a12410dc9aaf1ece0795932a90bfbf214c5755788930470781d42d797", make(map[string]any)},
+		{"tugger_train", "Tugger Train", 52.143145559062944, 11.65555937689635, false, "d93947a0684c917a1d2006f382a69695e3b35b4336935e7ce7ca3347ae5b1339", make(map[string]any)},
 	}
 
 	var hostname string
@@ -188,6 +189,17 @@ func main() {
 	mux.HandleFunc("/wt-vehicle", func(w http.ResponseWriter, r *http.Request) {
 		// TODO: auth
 		id := r.URL.Query().Get("VehicleId")
+		vehicle := findVehicle(ClientIdType(id), vehicles)
+		if vehicle == nil {
+			http.Error(w, "unknown vehicle", http.StatusBadRequest)
+			return
+		}
+		err := json.Unmarshal([]byte(r.URL.Query().Get("IoConf")), &vehicle.IoConf)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
 		log.Println("Connection attempt by vehicle", id)
 		session, err := wtSrv.Upgrade(w, r)
 		if err != nil {
@@ -206,7 +218,7 @@ func main() {
 	occBroker := NewWebTransportBroker()
 
 	// Serve webtransport for control centers
-	mux.HandleFunc("/wt-occ", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/wt-operator", func(w http.ResponseWriter, r *http.Request) {
 		// TODO: auth
 		id := r.URL.Query().Get("OccId")
 		session, err := wtSrv.Upgrade(w, r)
