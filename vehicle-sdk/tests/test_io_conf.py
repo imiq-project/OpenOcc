@@ -83,8 +83,21 @@ class IoConfFromClass(unittest.TestCase):
         with self.assertRaises(IoConfException):
             io_conf_for(MyVehicle())
 
+    def test_duplicate_command(self):
+        class MyVehicle:
+            @command("foo")
+            def foo_1(self):
+                pass
 
-class Applyio_conf_for(unittest.TestCase):
+            @command("foo")
+            def foo(self):
+                pass
+
+        with self.assertRaises(IoConfException):
+            io_conf_for(MyVehicle())
+
+
+class ApplyIoConf(unittest.TestCase):
     def test_simple(self):
         class MyVehicle:
             @outgoing("position", DataType.UInt64)
@@ -103,6 +116,10 @@ class Applyio_conf_for(unittest.TestCase):
             def set_angle(self, value):
                 self.angle = value
 
+            @command("add")
+            def add(self, a, b):
+                return a + b
+
         instance = MyVehicle()
         conf = io_conf_for(instance)
         conf.set_incoming(instance, {"angle": 10, "speed": 123})
@@ -112,6 +129,8 @@ class Applyio_conf_for(unittest.TestCase):
         self.assertEqual(len(out), 2)
         self.assertEqual(out["position"], 42)
         self.assertEqual(out["status"], 100)
+        res = conf.invoke_command(instance, "add", [42, 100])
+        self.assertEqual(res, 142)
 
 
 if __name__ == "__main__":

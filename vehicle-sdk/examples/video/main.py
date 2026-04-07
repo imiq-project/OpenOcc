@@ -50,6 +50,7 @@ async def main():
         @command("alarm")
         def trigger_alarm(self):
             logging.info("ALARM triggered")
+            return "ALARM!!!"
 
     client = VehicleClient(args.host, args.port, args.insecure, DummyVehicle())
     await client.loop()

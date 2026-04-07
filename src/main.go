@@ -215,7 +215,7 @@ func main() {
 		Vehicles []Vehicle
 	}
 
-	occBroker := NewWebTransportBroker()
+	operatorBroker := NewWebTransportBroker()
 
 	// Serve webtransport for control centers
 	mux.HandleFunc("/wt-operator", func(w http.ResponseWriter, r *http.Request) {
@@ -227,7 +227,7 @@ func main() {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		go occBroker.HandleSession(ClientIdType(id), session)
+		go operatorBroker.HandleSession(ClientIdType(id), session)
 	})
 
 	mux.HandleFunc("/send", func(w http.ResponseWriter, r *http.Request) {
@@ -244,7 +244,7 @@ func main() {
 
 	// connect the two brokers
 	type IncomingMsg struct {
-		Recipient ClientIdType
+		To ClientIdType
 	}
 	go func() {
 		for {
@@ -255,28 +255,34 @@ func main() {
 				vehicle.Connected = true
 				vehicleBroker.sendMessage(id, icdServers(expressTurnUser, expressTurnPass))
 				statusMessage, _ := json.Marshal(StatusMsg{"status", vehicles})
-				occBroker.broadcast("", statusMessage)
+				operatorBroker.broadcast("", statusMessage)
 			case id := <-vehicleBroker.Disconnected:
 				vehicle := findVehicle(id, vehicles)
 				// TODO nil
 				vehicle.Connected = false
 				statusMessage, _ := json.Marshal(StatusMsg{"status", vehicles})
-				occBroker.broadcast("", statusMessage)
+				operatorBroker.broadcast("", statusMessage)
 			case msg := <-vehicleBroker.Messages:
 				result := IncomingMsg{}
 				err := json.Unmarshal(msg.Payload, &result)
 				if err != nil {
 					log.Println("Received invalid message")
 				}
-				occBroker.sendMessage(result.Recipient, msg.Payload)
+				operatorBroker.sendMessage(result.To, msg.Payload)
 			case <-vehicleBroker.Datagrams:
-			case id := <-occBroker.Connected:
+			case id := <-operatorBroker.Connected:
 				statusMessage, _ := json.Marshal(StatusMsg{"status", vehicles})
-				occBroker.sendMessage(id, statusMessage)
-				occBroker.sendMessage(id, icdServers(expressTurnUser, expressTurnPass))
-			case <-occBroker.Disconnected:
-			case <-occBroker.Messages:
-			case <-occBroker.Datagrams:
+				operatorBroker.sendMessage(id, statusMessage)
+				operatorBroker.sendMessage(id, icdServers(expressTurnUser, expressTurnPass))
+			case <-operatorBroker.Disconnected:
+			case msg := <-operatorBroker.Messages:
+				result := IncomingMsg{}
+				err := json.Unmarshal(msg.Payload, &result)
+				if err != nil {
+					log.Println("Received invalid message")
+				}
+				vehicleBroker.sendMessage(result.To, msg.Payload)
+			case <-operatorBroker.Datagrams:
 			}
 		}
 	}()

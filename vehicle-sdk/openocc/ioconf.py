@@ -63,7 +63,7 @@ def outgoing(name, data_type: DataType):
 @dataclass
 class Command:
     name: str
-    func: Callable[[], Any]
+    func: Callable[[Any], Any]
 
     def to_json(self):
         return {"name": self.name}
@@ -117,6 +117,11 @@ class IoConf:
             if param.name in selected:
                 result[param.name] = param.func(instance)
         return result
+
+    def invoke_command(self, instance, method, params):
+        for command in self.commands:
+            if command.name == method:
+                return command.func(instance, *params)
 
 
 def io_conf_for(instance: object):

@@ -34,9 +34,10 @@ async def main():
     operator = DummyOperator()
     client = OperatorClient(args.host, args.port, args.insecure, operator)
     asyncio.create_task(client.loop())
+    logging.info(f"Waiting for a vehicle with command {args.command}...")
     vehicle = await operator.vehicle_found
-    print(vehicle)
-    
+    result = await client.send_rpc(vehicle, args.command, [])
+    logging.info(f"Result: {result}")
 
 
 if __name__ == "__main__":
