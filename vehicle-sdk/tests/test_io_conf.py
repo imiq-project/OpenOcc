@@ -2,9 +2,10 @@ import unittest
 from openocc.ioconf import (
     incoming,
     outgoing,
-    IoConf,
+    command,
     IoConfException,
     DataType,
+    io_conf_for,
 )
 
 
@@ -14,8 +15,8 @@ class IoConfFromClass(unittest.TestCase):
         class MyVehicle:
             pass
 
-        conf = IoConf(MyVehicle())
-        expected_conf = {"incoming": [], "outgoing": []}
+        conf = io_conf_for(MyVehicle())
+        expected_conf = {"incoming": [], "outgoing": [], "commands": []}
         self.assertEqual(expected_conf, conf.to_json())
 
     def test_simple(self):
@@ -36,7 +37,11 @@ class IoConfFromClass(unittest.TestCase):
             def set_angle(self):
                 pass
 
-        conf = IoConf(MyVehicle())
+            @command("alarm")
+            def trigger_alarm(self):
+                pass
+
+        conf = io_conf_for(MyVehicle())
         expected_conf = {
             "incoming": [
                 {"name": "angle", "type": "uint64"},
@@ -45,6 +50,9 @@ class IoConfFromClass(unittest.TestCase):
             "outgoing": [
                 {"name": "position", "type": "uint64"},
                 {"name": "status", "type": "status"},
+            ],
+            "commands": [
+                {"name": "alarm"},
             ],
         }
         self.assertEqual(expected_conf, conf.to_json())
@@ -60,7 +68,7 @@ class IoConfFromClass(unittest.TestCase):
                 pass
 
         with self.assertRaises(IoConfException):
-            IoConf(MyVehicle())
+            io_conf_for(MyVehicle())
 
     def test_duplicate_input(self):
         class MyVehicle:
@@ -73,10 +81,10 @@ class IoConfFromClass(unittest.TestCase):
                 pass
 
         with self.assertRaises(IoConfException):
-            IoConf(MyVehicle())
+            io_conf_for(MyVehicle())
 
 
-class ApplyIoConf(unittest.TestCase):
+class Applyio_conf_for(unittest.TestCase):
     def test_simple(self):
         class MyVehicle:
             @outgoing("position", DataType.UInt64)
@@ -96,11 +104,11 @@ class ApplyIoConf(unittest.TestCase):
                 self.angle = value
 
         instance = MyVehicle()
-        conf = IoConf(instance)
-        conf.set_incoming({"angle": 10, "speed": 123})
+        conf = io_conf_for(instance)
+        conf.set_incoming(instance, {"angle": 10, "speed": 123})
         self.assertEqual(instance.angle, 10)
         self.assertEqual(instance.speed, 123)
-        out = conf.get_outgoing(["position", "status"])
+        out = conf.get_outgoing(instance, ["position", "status"])
         self.assertEqual(len(out), 2)
         self.assertEqual(out["position"], 42)
         self.assertEqual(out["status"], 100)
