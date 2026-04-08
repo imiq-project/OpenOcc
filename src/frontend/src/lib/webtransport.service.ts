@@ -1,20 +1,37 @@
-import { Injectable, OnDestroy } from '@angular/core';
+import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, Subject } from 'rxjs';
 import { Vehicle } from '../model/vehicle';
-import { WebRtcService } from './webrtc.service';
 
+class WriteQueue {
+  private queue: Promise<void>
+
+  constructor(private writer: WritableStreamDefaultWriter) {
+    this.queue = Promise.resolve();
+  }
+
+  write(chunk: Uint8Array<ArrayBuffer>) {
+    this.queue = this.queue.then(() => this.writer.write(chunk));
+    return this.queue;
+  }
+
+  close() {
+    return this.queue.then(() => this.writer.close());
+  }
+}
 
 @Injectable({
   providedIn: 'root',
 })
-export class WebTransportService implements OnDestroy {
+export class WebTransportService {
   private transport?: WebTransport;
+  private writeQueue?: WriteQueue
   private connected$ = new BehaviorSubject<boolean>(false);
   private statusMessages$ = new Subject<Vehicle[]>();
   private answerMessages$ = new Subject<object>();
+  private iceServersUpdated$ = new Subject<Array<RTCIceServer>>();
   occId = "occ_" + Math.floor(Math.random() * 100000)
 
-  constructor(private webRtcService: WebRtcService) {
+  constructor() {
     this.connect()
   }
 
@@ -28,6 +45,10 @@ export class WebTransportService implements OnDestroy {
 
   get isConnected(): Observable<boolean> {
     return this.connected$.asObservable();
+  }
+
+  get iceServersUpdated(): Observable<Array<RTCIceServer>> {
+    return this.iceServersUpdated$.asObservable();
   }
 
   async connect(): Promise<void> {
@@ -72,6 +93,9 @@ export class WebTransportService implements OnDestroy {
 
     const stream = await this.transport.createBidirectionalStream();
     const reader = stream.readable.getReader();
+    const writer = stream.writable.getWriter();
+
+    this.writeQueue = new WriteQueue(writer)
 
     try {
       let buffer = []
@@ -93,7 +117,7 @@ export class WebTransportService implements OnDestroy {
                 this.answerMessages$.next(data)
                 break
               case "iceServers":
-                this.webRtcService.setIceServers(data["iceServers"])
+                this.iceServersUpdated$.next(data["iceServers"])
                 break;
               default:
                 console.error(`Unknown message ${type}`)
@@ -111,14 +135,22 @@ export class WebTransportService implements OnDestroy {
     }
   }
 
-  sendData(data: string) {
+  async sendDatagram(data: string) {
     if (!this.transport || !this.connected$.value) {
       throw new Error('WebTransport not connected.');
     }
 
     const writer = this.transport.datagrams.writable.getWriter();
-    writer.write(new TextEncoder().encode(data));
+    await writer.write(new TextEncoder().encode(data));
     writer.releaseLock();
+  }
+
+  async sendMessage(msg: string) {
+    if (!this.transport || !this.connected$.value || !this.writeQueue) {
+      throw new Error('WebTransport not connected.');
+    }
+    const encoder = new TextEncoder();
+    await this.writeQueue.write(encoder.encode(msg + "\0"))
   }
 
   disconnect() {
@@ -127,10 +159,4 @@ export class WebTransportService implements OnDestroy {
     this.connected$.next(false);
   }
 
-  ngOnDestroy() {
-    this.disconnect();
-    this.statusMessages$.complete();
-    this.answerMessages$.complete();
-    this.connected$.complete();
-  }
 }

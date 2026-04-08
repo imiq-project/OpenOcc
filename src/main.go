@@ -4,7 +4,6 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"flag"
-	"io"
 	"log"
 	"net/http"
 	"os"
@@ -228,18 +227,6 @@ func main() {
 			return
 		}
 		go operatorBroker.HandleSession(ClientIdType(id), session)
-	})
-
-	mux.HandleFunc("/send", func(w http.ResponseWriter, r *http.Request) {
-		recipient := r.URL.Query().Get("Recipient")
-		bytes, _ := io.ReadAll(r.Body)
-		err := vehicleBroker.sendMessage(ClientIdType(recipient), bytes)
-		if err == nil {
-			w.WriteHeader(http.StatusOK)
-		} else {
-			w.WriteHeader(http.StatusNotAcceptable)
-			log.Println(err)
-		}
 	})
 
 	// connect the two brokers

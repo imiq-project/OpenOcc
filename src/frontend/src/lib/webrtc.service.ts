@@ -1,6 +1,8 @@
-import { Injectable, OnDestroy } from '@angular/core';
+import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, Subject } from 'rxjs';
 import { Vehicle } from '../model/vehicle';
+import { WebTransportService } from './webtransport.service';
+import { Subscription } from 'rxjs';
 
 export enum State {
     Disconnected = "disconnected",
@@ -29,11 +31,21 @@ class Connection {
 @Injectable({
     providedIn: 'root',
 })
-export class WebRtcService implements OnDestroy {
+export class WebRtcService {
 
     private connection?: Connection;
     private status$ = new BehaviorSubject<WebRtcStatus>(new WebRtcStatus(State.Disconnected));
     private iceServers = new Array<RTCIceServer>()
+    subs = new Subscription();
+
+    constructor(private webTransport: WebTransportService) {
+        this.subs.add(
+            this.webTransport.iceServersUpdated.subscribe((servers) => {
+                this.iceServers = servers
+                console.info(`Received ${servers.length} new ICE servers`)
+            })
+        );
+    }
 
     get status(): Observable<WebRtcStatus> {
         return this.status$.asObservable();
@@ -75,10 +87,13 @@ export class WebRtcService implements OnDestroy {
                 return
             }
             console.log("New ice candidate", e.candidate)
-            await fetch(`/send?Recipient=${vehicle.id}`, {
-                method: "POST",
-                body: JSON.stringify({ "Type": "iceCandidate", "Candidate": e.candidate.toJSON() })
-            })
+            await this.webTransport.sendMessage(
+                JSON.stringify({
+                    "Type": "iceCandidate",
+                    "To": vehicle.id,
+                    "Candidate": e.candidate.toJSON()
+                })
+            )
         }
         rtc.onicecandidateerror = (event) => {
             console.log("onicecandidateerror", event)
@@ -109,10 +124,14 @@ export class WebRtcService implements OnDestroy {
 
         const offer = await rtc.createOffer()
         await rtc.setLocalDescription(offer)
-        await fetch(`/send?Recipient=${vehicle.id}`, {
-            method: "POST",
-            body: JSON.stringify({ "Type": "offer", "OccId": occId, "Sdp": offer.sdp })
-        })
+        await this.webTransport.sendMessage(
+            JSON.stringify({
+                "To": vehicle.id,
+                "Type": "offer",
+                "OccId": occId,
+                "Sdp": offer.sdp
+            })
+        )
     }
 
     stop() {
@@ -138,10 +157,6 @@ export class WebRtcService implements OnDestroy {
             sdp: answer["Sdp"],
             type: 'answer',
         })
-    }
-
-    ngOnDestroy(): void {
-        this.connection?.rtc.close()
     }
 
 }
