@@ -122,7 +122,7 @@ class IoConf:
         for command in self.commands:
             if command.name == method:
                 return command.func(instance, *params)
-
+        raise IoConfException(f"Command {method} does not exist")
 
 def io_conf_for(instance: object):
     result = IoConf()

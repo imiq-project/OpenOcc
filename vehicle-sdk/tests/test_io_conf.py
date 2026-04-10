@@ -131,6 +131,8 @@ class ApplyIoConf(unittest.TestCase):
         self.assertEqual(out["status"], 100)
         res = conf.invoke_command(instance, "add", [42, 100])
         self.assertEqual(res, 142)
+        with self.assertRaises(IoConfException):
+            conf.invoke_command(instance, "invalid", [])
 
 
 if __name__ == "__main__":

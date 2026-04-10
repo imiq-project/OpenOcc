@@ -36,8 +36,11 @@ async def main():
     asyncio.create_task(client.loop())
     logging.info(f"Waiting for a vehicle with command {args.command}...")
     vehicle = await operator.vehicle_found
-    result = await client.send_rpc(vehicle, args.command, [])
+    result = await client.send_rpc_request(vehicle, args.command, [])
     logging.info(f"Result: {result}")
+    await client.start_webrtc(vehicle)
+    while True:
+        await asyncio.sleep(5)
 
 
 if __name__ == "__main__":
