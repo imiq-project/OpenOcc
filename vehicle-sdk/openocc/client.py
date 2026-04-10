@@ -72,58 +72,42 @@ class ClientBase(ABC):
         self._rpc_waiters: Dict[int, Future[Any]] = {}
 
     async def loop(self):
-        asyncio.create_task(self._process_datagram())
-        asyncio.create_task(self._process_stream())
+        asyncio.create_task(self._process_datagrams())
+        asyncio.create_task(self._process_messages())
         asyncio.create_task(self._webtransport.loop())
         await self._webtransport.connected.wait()
         logging.info("WebTransport connected")
         await self._send_outgoing()
-
-    def _send_stream(self, message: dict):
-        # TODO: ensure that message does not contain \0 already
-        data = json.dumps(message).encode()
-        data += b"\0"  # delimiter
-        self._webtransport.send_stream(data)
 
     async def _send_outgoing(self):
         while True:
             await asyncio.sleep(5)
             self._webtransport.send_datagram(b"")
 
-    async def _process_stream(self):
-        buffer = bytearray()
-        while True:
-            data = await self._webtransport.stream.get()
-            for value in data:
-                if value == 0:
-                    await self._process_stream_message(bytes(buffer))
-                    buffer = bytearray()
-                else:
-                    buffer.append(value)
-
-    async def _process_datagram(self):
+    async def _process_datagrams(self):
         while True:
             data = await self._webtransport.datagrams.get()
             logging.info(f"Received datagram: {len(data)} bytes")
 
-    async def _process_stream_message(self, message):
-        assert isinstance(message, bytes)
-        try:
-            data = json.loads(message.decode())
-        except json.decoder.JSONDecodeError as e:
-            logging.error(f"Received invalid message: {e}")
-            return
-        assert isinstance(data, dict)
-        type_ = data.get("Type")
-        logging.info(f"Received stream msg '{type_}'")
-        assert isinstance(type_, str)
-        try:
-            handler = self.message_handlers[type_]
-        except KeyError:
-            logging.error(f"Received message with unknown type {type_}")
-            return
+    async def _process_messages(self):
+        while True:
+            message = await self._webtransport.messages.get()
+            try:
+                data = json.loads(message.decode())
+            except json.decoder.JSONDecodeError as e:
+                logging.error(f"Received invalid message: {e}")
+                return
+            assert isinstance(data, dict)
+            type_ = data.get("Type")
+            logging.info(f"Received stream msg '{type_}'")
+            assert isinstance(type_, str)
+            try:
+                handler = self.message_handlers[type_]
+            except KeyError:
+                logging.error(f"Received message with unknown type {type_}")
+                return
 
-        await handler(data)
+            await handler(data)
 
     async def _process_ice_servers(self, data: dict):
         servers = data["iceServers"]
@@ -152,18 +136,20 @@ class ClientBase(ABC):
         self._next_rpc_id += 1
         future = asyncio.Future()
         self._rpc_waiters[self._next_rpc_id] = future
-        self._send_stream(
-            {
-                "Type": "rpcRequest",
-                "From": self._client_id,
-                "To": to,
-                "Payload": {
-                    "jsonrpc": "2.0",
-                    "method": method,
-                    "params": params,
-                    "id": self._next_rpc_id,
-                },
-            }
+        self._webtransport.send_message(
+            json.dumps(
+                {
+                    "Type": "rpcRequest",
+                    "From": self._client_id,
+                    "To": to,
+                    "Payload": {
+                        "jsonrpc": "2.0",
+                        "method": method,
+                        "params": params,
+                        "id": self._next_rpc_id,
+                    },
+                }
+            )
         )
         # TODO: timeout
         # Will be set in _process_rpc_response
@@ -225,13 +211,15 @@ class ClientBase(ABC):
                 "id": id_,
             }
 
-        self._send_stream(
-            {
-                "Type": "rpcResponse",
-                "To": from_,  # return to sender
-                "From": to,
-                "Payload": payload,
-            }
+        self._webtransport.send_message(
+            json.dumps(
+                {
+                    "Type": "rpcResponse",
+                    "To": from_,  # return to sender
+                    "From": to,
+                    "Payload": payload,
+                }
+            )
         )
 
     @abstractmethod
