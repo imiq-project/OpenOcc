@@ -160,31 +160,3 @@ class WebTransportClient:
         data = message.encode()
         data += b"\0"  # delimiter
         self._protocol.send_stream(data)
-
-
-async def main():
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(module)s - %(levelname)s - %(message)s",
-    )
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--host", default="imiq-occ.et.uni-magdeburg.de")
-    parser.add_argument("--port", type=int, default=443)
-    parser.add_argument("--path", default="/wt-vehicle?VehicleId=tugger_train")
-    parser.add_argument("--insecure", action="store_true", default=False)
-    args = parser.parse_args()
-    client = WebTransportClient(args.host, args.port, args.path, args.insecure)
-
-    async def dump_queue(q: asyncio.Queue):
-        while True:
-            data = await q.get()
-            print(data)
-
-    asyncio.create_task(dump_queue(client.datagrams))
-    asyncio.create_task(dump_queue(client.messages))
-    await client.loop()
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
