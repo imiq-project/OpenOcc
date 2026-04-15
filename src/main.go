@@ -7,6 +7,8 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"time"
 
@@ -17,21 +19,17 @@ import (
 )
 
 type Vehicle struct {
-	Id        ClientIdType
-	Name      string
-	Lat       float32
-	Lon       float32
-	Connected bool
-	key       string // for decryption/encryption of heartbeats
+	Id        ClientIdType `json:"Id"`
+	Name      string       `json:"Name"`
+	Lat       float64      `json:"Lat"`
+	Lon       float64      `json:"Lon"`
+	Connected bool         `json:"Connected"`
+	key       string       `json:"-"` // encryption key — never sent to clients
 }
 
-func findVehicle(id ClientIdType, vehicles []Vehicle) *Vehicle {
-	for idx, vehicle := range vehicles {
-		if vehicle.Id == id {
-			return &vehicles[idx]
-		}
-	}
-	return nil
+type StatusMsg struct {
+	Type     string
+	Vehicles []Vehicle
 }
 
 func AltSvc(h3Port string) func(http.Handler) http.Handler {
@@ -53,18 +51,30 @@ func GetEnvOrPanic(key string) string {
 	return value
 }
 
+func GetEnvOrDefault(key, fallback string) string {
+	value, exists := os.LookupEnv(key)
+	if !exists {
+		return fallback
+	}
+	return value
+}
+
 func main() {
 	express_turn_user := GetEnvOrPanic("EXPRESS_TURN_USERNAME")
 	express_turn_pass := GetEnvOrPanic("EXPRESS_TURN_PASSWORD")
 
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
-	// TODO: store these in a database
-	vehicles := []Vehicle{
-		{"delivery_robot", "Delivery Robot", 52.14103951249229, 11.655338089964646, false, "e59d2738829ff3c344ebf3b904b7156368d604ed76ebe01a81d95d9257962d27"},
-		{"cargo_bike", "Cargo Bike", 52.1402478934974, 11.646169343553602, false, "9847ab2a12410dc9aaf1ece0795932a90bfbf214c5755788930470781d42d797"},
-		{"tugger_train", "Tugger Train", 52.143145559062944, 11.65555937689635, false, "d93947a0684c917a1d2006f382a69695e3b35b4336935e7ce7ca3347ae5b1339"},
+	// Database
+	dbConnStr := GetEnvOrDefault("DATABASE_URL", "postgres://occ:occ@localhost:5432/occ?sslmode=disable")
+	db := InitDB(dbConnStr)
+	defer db.Close()
+
+	vehicles, err := LoadVehicles(db)
+	if err != nil {
+		log.Fatalf("failed to load vehicles: %v", err)
 	}
+	log.Printf("Loaded %d vehicles from database", len(vehicles))
 
 	var hostname string
 	flag.StringVar(&hostname, "hostname", "localhost", "the server's host name")
@@ -139,11 +149,12 @@ func main() {
 		H3: h3srv,
 	}
 
-	// Serve static files
-	fs := http.FileServer(http.Dir("./frontend/dist/frontend/browser"))
-	mux.Handle("/static/", http.StripPrefix("/static/", fs))
+	// Proxy to next.js
+	target, _ := url.Parse("http://client:3000")
+	proxy := httputil.NewSingleHostReverseProxy(target)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "./frontend/dist/frontend/browser/index.html")
+		log.Println("Proxying request for", r.URL.Path, "to", target)
+		proxy.ServeHTTP(w, r)
 	})
 
 	// ICE Servers
@@ -159,14 +170,14 @@ func main() {
 
 		response := Response{
 			IceServers: []ICECredential{
-				ICECredential{
+				{
 					URLs: []string{
 						"stun:stun.l.google.com:19302",
 					},
 					Username:   "",
 					Credential: "",
 				},
-				ICECredential{
+				{
 					URLs: []string{
 						"turn:free.expressturn.com:3478?transport=udp",
 						"turn:free.expressturn.com:3478?transport=tcp",
@@ -184,6 +195,21 @@ func main() {
 	})
 
 	vehicleBroker := NewWebTransportBroker()
+	occBroker := NewWebTransportBroker()
+
+	// Vehicle store — shared state between broker loop and API handlers
+	store := &VehicleStore{
+		vehicles:      vehicles,
+		db:            db,
+		occBroker:     &occBroker,
+		vehicleBroker: &vehicleBroker,
+	}
+
+	// Initial status broadcast
+	store.broadcastStatus()
+
+	// REST API
+	RegisterAPIRoutes(mux, store)
 
 	// Serve webtransport for vehicles
 	mux.HandleFunc("/wt-vehicle", func(w http.ResponseWriter, r *http.Request) {
@@ -198,15 +224,6 @@ func main() {
 		}
 		vehicleBroker.HandleSession(ClientIdType(id), session)
 	})
-
-	type StatusMsg struct {
-		Type     string
-		Vehicles []Vehicle
-	}
-
-	occBroker := NewWebTransportBroker()
-	statusMessage, _ := json.Marshal(StatusMsg{"status", vehicles})
-	occBroker.updateStatus(statusMessage)
 
 	// Serve webtransport for control centers
 	mux.HandleFunc("/wt-occ", func(w http.ResponseWriter, r *http.Request) {
@@ -233,7 +250,7 @@ func main() {
 		}
 	})
 
-	// connect the two brokers
+	// Connect the two brokers
 	type IncomingMsg struct {
 		Recipient ClientIdType
 	}
@@ -241,17 +258,21 @@ func main() {
 		for {
 			select {
 			case id := <-vehicleBroker.Connected:
-				vehicle := findVehicle(id, vehicles)
-				// TODO nil
-				vehicle.Connected = true
-				statusMessage, _ := json.Marshal(StatusMsg{"status", vehicles})
-				occBroker.updateStatus(statusMessage)
+				store.mu.Lock()
+				if v, ok := store.vehicles[id]; ok {
+					v.Connected = true
+				}
+				store.mu.Unlock()
+				store.broadcastStatus()
+
 			case id := <-vehicleBroker.Disconnected:
-				vehicle := findVehicle(id, vehicles)
-				// TODO nil
-				vehicle.Connected = false
-				statusMessage, _ := json.Marshal(StatusMsg{"status", vehicles})
-				occBroker.updateStatus(statusMessage)
+				store.mu.Lock()
+				if v, ok := store.vehicles[id]; ok {
+					v.Connected = false
+				}
+				store.mu.Unlock()
+				store.broadcastStatus()
+
 			case msg := <-vehicleBroker.Messages:
 				result := IncomingMsg{}
 				err := json.Unmarshal(msg.Payload, &result)
@@ -259,10 +280,19 @@ func main() {
 					log.Println("Received invalid message")
 				}
 				occBroker.sendMessage(result.Recipient, msg.Payload)
+
+			case msg := <-occBroker.Messages:
+				result := IncomingMsg{}
+				err := json.Unmarshal(msg.Payload, &result)
+				if err != nil {
+					log.Println("Received invalid message from OCC")
+					continue
+				}
+				vehicleBroker.sendMessage(result.Recipient, msg.Payload)
+
 			case <-vehicleBroker.Datagrams:
 			case <-occBroker.Connected:
 			case <-occBroker.Disconnected:
-			case <-occBroker.Messages:
 			case <-occBroker.Datagrams:
 			}
 		}
@@ -275,6 +305,6 @@ func main() {
 	}()
 
 	log.Println("Starting HTTP/3 server (UDP/QUIC) on", h3srv.Addr)
-	err := wtSrv.ListenAndServe()
+	err = wtSrv.ListenAndServe()
 	log.Fatal("HTTP/3 failed:", err)
 }

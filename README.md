@@ -6,16 +6,6 @@ google-chrome --enable-quic --origin-to-force-quic-on=localhost:443 https://loca
 
 Additionally import certificate
 
-# Compose
-
-```yml
-services:
-  server:
-    command: sleep infinity
-    volumes:
-      - ./src:/app
-```
-
 # FAQs
 
 Error: failed to sufficiently increase receive buffer size
@@ -34,12 +24,45 @@ sysctl -w net.core.wmem_max=7500000
 Requires pip >= 24
 
 
-# Debugging
+# Development
 
-## WebRTC
+## Docker
+Create a compose.override.yml like this:
+
+```yaml
+services:
+  server:
+    build:
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./src:/app
+  client:
+    build:
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./client:/app
+```
+
+Then run `docker compose up -d` to start the containers, followed by:
+
+```sh
+docker compose exec server bash
+go run .
+```
+
+And in a second terminal:
+
+```sh
+docker compose exec client sh
+yarn install
+npm run dev
+```
+
+## Debug WebRTC
 
 In Firefox:
 about:webrtc
 
 In Chrome:
 chrome://webrtc-internals
+

@@ -3,3 +3,12 @@ src/frontend/node_modules
 venv
 __pycache__
 compose.override.yml
+
+# ROS 2 / colcon
+build/
+install/
+log/
+
+# Python
+*.pyc
+*.egg-info/

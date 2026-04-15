@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<robot name="husky">
+    <webots>
+        <plugin type="imiq_launch.husky_driver.HuskyDriver">
+        </plugin>
+    </webots>
+</robot>

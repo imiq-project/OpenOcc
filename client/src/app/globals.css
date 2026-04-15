@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Design tokens ───────────────────────────────────────────────── */
+@layer base {
+    :root {
+        --occ-bg: 240 240 243;
+        --occ-surface: 255 255 255;        /* cards, panels */
+        --occ-surface-raised: 246 246 250; /* table headers */
+        --occ-border: 55 58 68;            /* dark borders for clear separation */
+        --occ-deep: 235 236 240;           /* camera / 3D viewport bg */
+        --occ-nav: 255 255 255;
+        --occ-nav-border: 55 58 68;
+    }
+}
+
+/* ── Shared component classes ────────────────────────────────────── */
+@layer components {
+    .occ-card {
+        @apply border border-occ-border bg-occ-surface rounded-lg shadow-sm;
+    }
+
+    .occ-section-label {
+        @apply text-xs font-medium text-default-500 uppercase tracking-wider;
+    }
+
+    .occ-page {
+        @apply flex gap-2 h-full;
+    }
+}
+
+/* ── Scrollbar ───────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: rgb(245 245 248);
+}
+::-webkit-scrollbar-thumb {
+    background: rgb(200 203 212);
+    border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: rgb(170 173 182);
+}

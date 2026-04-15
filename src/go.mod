@@ -4,6 +4,8 @@ go 1.25.1
 
 require golang.org/x/net v0.46.0
 
+require github.com/lib/pq v1.10.9 // indirect
+
 require (
 	github.com/quic-go/qpack v0.5.1 // indirect
 	github.com/quic-go/quic-go v0.53.0 // indirect

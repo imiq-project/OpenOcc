@@ -1,15 +1,42 @@
 services:
+  postgres:
+    image: postgres:17-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: occ
+      POSTGRES_PASSWORD: occ
+      POSTGRES_DB: occ
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U occ"]
+      interval: 5s
+      retries: 5
+
   server:
     build:
       context: src
       dockerfile: Dockerfile
     restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
     volumes:
       - ./certs:/certs
     environment:
       - EXPRESS_TURN_USERNAME=
       - EXPRESS_TURN_PASSWORD=
+      - DATABASE_URL=postgres://occ:occ@postgres:5432/occ?sslmode=disable
     ports:
-      - 80:80 # http
+      - 80:80/tcp   # http
       - 443:443/tcp # https
       - 443:443/udp # http/3
+
+  client:
+    build:
+      context: client
+      dockerfile: Dockerfile
+    restart: always
+
+volumes:
+  pgdata:

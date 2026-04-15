@@ -1,0 +1,1 @@
+export type FixedColor = object & { DEFAULT: any };

@@ -1,0 +1,169 @@
+#VRML_SIM R2025a utf8
+
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/projects/objects/backgrounds/protos/TexturedBackground.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/projects/objects/backgrounds/protos/TexturedBackgroundLight.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/projects/objects/floors/protos/Floor.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/projects/objects/road/protos/StraightRoadSegment.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/projects/objects/road/protos/RoadIntersection.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/projects/objects/buildings/protos/SimpleBuilding.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/road/protos/RoadLine.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/projects/appearances/protos/Pavement.proto"
+EXTERNPROTO "protos/Husky.proto"
+
+WorldInfo {
+  info [
+    "IMIQ OCC — Magdeburg Wissenschaftshafen simulation"
+    "Clearpath Husky robot with camera, depth, GPS, IMU, gyro"
+  ]
+  title "Wissenschaftshafen"
+  gpsCoordinateSystem "WGS84"
+  gpsReference 52.144 11.654 0
+  lineScale 4
+  basicTimeStep 10
+}
+Viewpoint {
+  orientation -0.25 0.04 0.97 3.7
+  position 20 -10 12
+  near 0.5
+  follow "husky"
+  followType "None"
+}
+TexturedBackground {
+}
+TexturedBackgroundLight {
+}
+Floor {
+  translation 0 0 -0.02
+  size 500 500
+  appearance PBRAppearance {
+    baseColorMap ImageTexture {
+      url [
+        "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/projects/default/worlds/textures/grass.jpg"
+      ]
+    }
+    roughness 1
+    metalness 0
+  }
+}
+StraightRoadSegment {
+  translation 0 0 0.01
+  rotation 0 0 1 0
+  name "road_main_ew"
+  width 6
+  length 200
+  lines [
+    RoadLine {
+      type "continuous"
+    }
+  ]
+}
+StraightRoadSegment {
+  translation 50 -100 0.01
+  rotation 0 0 1 1.5708
+  name "road_main_ns"
+  width 6
+  length 200
+  lines [
+    RoadLine {
+      type "continuous"
+    }
+  ]
+}
+StraightRoadSegment {
+  translation 0 30 0.01
+  rotation 0 0 1 0
+  name "road_campus_1"
+  width 4
+  length 120
+  lines [
+    RoadLine {
+      type "dashed"
+    }
+  ]
+}
+RoadIntersection {
+  translation 50 0 0.01
+  rotation 0 0 1 0
+}
+SimpleBuilding {
+  translation 30 20 0
+  name "building_lab"
+  floorHeight 3.5
+  floorNumber 3
+  corners [
+    0 0
+    30 0
+    30 15
+    0 15
+  ]
+}
+SimpleBuilding {
+  translation 80 -20 0
+  name "building_office"
+  floorHeight 3
+  floorNumber 4
+  corners [
+    0 0
+    40 0
+    40 20
+    0 20
+  ]
+}
+SimpleBuilding {
+  translation -20 -30 0
+  name "building_warehouse"
+  floorHeight 5
+  floorNumber 1
+  corners [
+    0 0
+    25 0
+    25 25
+    0 25
+  ]
+}
+SimpleBuilding {
+  translation 100 40 0
+  name "building_research"
+  floorHeight 3.5
+  floorNumber 2
+  corners [
+    0 0
+    35 0
+    35 12
+    0 12
+  ]
+}
+Husky {
+  translation 10 0 0.255
+  rotation 0 0 -1 1.5708
+  name "husky"
+  controller "<extern>"
+  extensionSlot [
+    Camera {
+      translation 0.32 0 0.25
+      name "camera"
+      fieldOfView 1.047
+      width 640
+      height 480
+      recognition Recognition {
+      }
+    }
+    RangeFinder {
+      translation 0.32 0 0.23
+      name "depth"
+      fieldOfView 1.047
+      width 640
+      height 480
+      minRange 0.1
+      maxRange 10
+    }
+    GPS {
+    }
+    InertialUnit {
+    }
+    Gyro {
+    }
+    Accelerometer {
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+#VRML_SIM R2023b utf8
+
+PROTO HuskyShape [
+  field SFVec3f    translation 0 0 0
+  field SFRotation rotation 0 1 0 0
+  field SFVec3f    scale 0.001 0.001 0.001
+]
+{
+  Transform {
+    translation IS translation
+    rotation IS rotation
+    scale IS scale
+    children [
+      Shape {
+        appearance PBRAppearance {
+          baseColor 0.2 0.2 0.2
+          roughness 0.4
+          metalness 0.1
+        }
+        geometry Mesh {
+          url [
+            "model/husky.stl"
+          ]
+        }
+      }
+    ]
+  }
+}
