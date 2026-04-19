@@ -1,18 +1,19 @@
 package main
 
 import (
-	"database/sql"
 	"encoding/json"
 	"log"
 	"net/http"
 	"strings"
 	"sync"
+
+	"gorm.io/gorm"
 )
 
 type VehicleStore struct {
 	mu            sync.RWMutex
 	vehicles      map[ClientIdType]*Vehicle
-	db            *sql.DB
+	db            *gorm.DB
 	occBroker     *WebtransportBroker
 	vehicleBroker *WebtransportBroker
 }

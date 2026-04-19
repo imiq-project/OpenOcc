@@ -66,3 +66,19 @@ about:webrtc
 In Chrome:
 chrome://webrtc-internals
 
+# Database
+
+The Go server uses **Postgres** via **GORM**. Schema is managed with **golang-migrate** and applied automatically at startup.
+
+Add a vehicle:
+
+```sh
+curl -k -X POST https://localhost/api/vehicles \
+  -H 'content-type: application/json' \
+  -d '{"Id":"my_robot","Name":"My Robot","Lat":52.13,"Lon":11.64}'
+```
+
+List: `curl -k https://localhost/api/vehicles`
+
+Delete: `curl -k -X DELETE https://localhost/api/vehicles/my_robot`
+

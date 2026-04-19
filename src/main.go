@@ -19,13 +19,15 @@ import (
 )
 
 type Vehicle struct {
-	Id        ClientIdType `json:"Id"`
-	Name      string       `json:"Name"`
-	Lat       float64      `json:"Lat"`
-	Lon       float64      `json:"Lon"`
-	Connected bool         `json:"Connected"`
-	key       string       `json:"-"` // encryption key — never sent to clients
+	Id        ClientIdType  `gorm:"column:id;primaryKey"           json:"Id"`
+	Name      string        `gorm:"column:name;not null"           json:"Name"`
+	Lat       float64       `gorm:"column:lat;not null;default:0"  json:"Lat"`
+	Lon       float64       `gorm:"column:lon;not null;default:0"  json:"Lon"`
+	Connected bool          `gorm:"-"                              json:"Connected"`
+	Key       EncryptionKey `gorm:"column:key;not null;default:''" json:"-"`
 }
+
+func (Vehicle) TableName() string { return "vehicles" }
 
 type StatusMsg struct {
 	Type     string
@@ -67,8 +69,17 @@ func main() {
 
 	// Database
 	dbConnStr := GetEnvOrDefault("DATABASE_URL", "postgres://occ:occ@localhost:5432/occ?sslmode=disable")
-	db := InitDB(dbConnStr)
-	defer db.Close()
+	sqlDB, err := OpenSQLPool(dbConnStr)
+	if err != nil {
+		log.Fatalf("open db pool: %v", err)
+	}
+	defer sqlDB.Close()
+
+	if err := RunMigrations(sqlDB); err != nil {
+		log.Fatalf("migrations: %v", err)
+	}
+
+	db := InitGORM(sqlDB)
 
 	vehicles, err := LoadVehicles(db)
 	if err != nil {
