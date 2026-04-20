@@ -97,7 +97,7 @@ const TeleoperationScene: React.FC = () => {
                             color="#ff6600" />
                     </>
                 )}
-            </Canvas> */}
+            </Canvas>
 
             {/* Re-center / Free camera button */}
             <button
