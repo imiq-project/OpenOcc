@@ -29,19 +29,15 @@ async def main():
                 "http://download.tsi.telecom-paristech.fr/gpac/dataset/dash/uhd/mux_sources/hevcds_720p30_2M.mp4"
             )
 
-        def set_speed(self, value):
-            print(f"New speed: {value}")
-
-        def set_angle(self, value):
-            print(f"New angle: {value}")
+        def set_motion(self, speed, angle):
+            print(speed, angle)
 
         def get_frame(self):
             assert self.player.video
             return asyncio.run(self.player.video.recv())
 
-        def emergency_halt(self):
+        def emergency_halt(self, enable: bool):
             logging.info("Emergency halt triggered!")
-
 
     client = VehicleClient(args.host, args.port, args.insecure, DummyVehicle())
     await client.loop()

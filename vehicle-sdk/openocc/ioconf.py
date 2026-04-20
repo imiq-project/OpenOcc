@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Callable, Type
+from typing import List, Dict, Any, Callable, Type, Union
 from enum import Enum
 import struct
 
@@ -14,7 +14,6 @@ class DataType(Enum):
     Int64 = "int64"
     UInt64 = "uint64"
     Status = "status"
-    LatLon = "latlon"
     Video = "video"
     Audio = "audio"
 
@@ -26,20 +25,22 @@ class IoConfException(Exception):
 @dataclass
 class IncomingParam:
     name: str
-    data_type: DataType
+    data_types: List[DataType]
     func: Callable[[Any, Any], Any]
 
     def to_json(self):
-        return {"name": self.name, "type": self.data_type.value}
+        return {"name": self.name, "types": [i.value for i in self.data_types]}
 
     @classmethod
     def from_json(cls, data: dict) -> "IncomingParam":
-        return IncomingParam(data["name"], DataType(data["type"]), lambda _, __: None)
+        return IncomingParam(
+            data["name"], [DataType(i) for i in data["types"]], lambda _, __: None
+        )
 
 
-def incoming(name: str, data_type: DataType):
+def incoming(name: str, data_types: List[DataType]):
     def decorator(func):
-        setattr(func, _INPUT_PARAM, IncomingParam(name, data_type, func))
+        setattr(func, _INPUT_PARAM, IncomingParam(name, data_types, func))
         return func
 
     return decorator
@@ -48,20 +49,22 @@ def incoming(name: str, data_type: DataType):
 @dataclass
 class OutgoingParam:
     name: str
-    data_type: DataType
+    data_types: List[DataType]
     func: Callable[[Any], Any]
 
     def to_json(self):
-        return {"name": self.name, "type": self.data_type.value}
+        return {"name": self.name, "types": [i.value for i in self.data_types]}
 
     @classmethod
     def from_json(cls, data: dict) -> "OutgoingParam":
-        return OutgoingParam(data["name"], data["type"], lambda _: None)
+        return OutgoingParam(
+            data["name"], [DataType(i) for i in data["types"]], lambda _: None
+        )
 
 
-def outgoing(name, data_type: DataType):
+def outgoing(name, data_types: List[DataType]):
     def decorator(func):
-        setattr(func, _OUTPUT_PARAM, OutgoingParam(name, data_type, func))
+        setattr(func, _OUTPUT_PARAM, OutgoingParam(name, data_types, func))
         return func
 
     return decorator
@@ -120,34 +123,36 @@ class IoConf:
             return chunk
 
         for param in self.incoming:
-            dt = param.data_type
-            if dt == DataType.Int8:
-                value = struct.unpack("b", read(1))[0]
-            elif dt == DataType.UInt8:
-                value = struct.unpack("B", read(1))[0]
-            elif dt == DataType.Int64:
-                value = struct.unpack(">q", read(8))[0]  # big-endian
-            elif dt == DataType.UInt64:
-                value = struct.unpack(">Q", read(8))[0]
-            else:
-                raise ValueError(f"Invalid data type {dt}")
-            param.func(value)
+            values = []
+            for dt in param.data_types:
+                if dt == DataType.Int8:
+                    value = struct.unpack("b", read(1))[0]
+                elif dt == DataType.UInt8:
+                    value = struct.unpack("B", read(1))[0]
+                elif dt == DataType.Int64:
+                    value = struct.unpack(">q", read(8))[0]  # big-endian
+                elif dt == DataType.UInt64:
+                    value = struct.unpack(">Q", read(8))[0]
+                else:
+                    raise ValueError(f"Invalid data type {dt}")
+                values.append(value)
+            param.func(*values)
 
     def make_incoming(self, values: Dict[str, Any]):
         result = bytearray()
         for param in self.incoming:
-            dt = param.data_type
-            value = values[param.name]
-            if dt == DataType.Int8:
-                result += struct.pack("b", value)
-            elif dt == DataType.UInt8:
-                result += struct.pack("B", value)
-            elif dt == DataType.Int64:
-                result += struct.pack(">q", value)
-            elif dt == DataType.UInt64:
-                result += struct.pack(">Q", value)
-            else:
-                raise ValueError(f"Invalid data type {dt}")
+            param_values = values[param.name]
+            for dt, value in zip(param.data_types, param_values):
+                if dt == DataType.Int8:
+                    result += struct.pack("b", value)
+                elif dt == DataType.UInt8:
+                    result += struct.pack("B", value)
+                elif dt == DataType.Int64:
+                    result += struct.pack(">q", value)
+                elif dt == DataType.UInt64:
+                    result += struct.pack(">Q", value)
+                else:
+                    raise ValueError(f"Invalid data type {dt}")
         return bytes(result)
 
     def invoke_command(self, instance, method, params):
@@ -180,12 +185,12 @@ def io_conf_for(instance: object, base_kls: Type):
         output_param = getattr(method, _OUTPUT_PARAM, None)
         if output_param and overrides(instance, name, base_kls):
             assert isinstance(output_param, OutgoingParam)
-            output_param.func = getattr(instance, name) # TODO: deep copy
+            output_param.func = getattr(instance, name)  # TODO: deep copy
             result.outgoing.append(output_param)
         command = getattr(method, _COMMAND, None)
         if command and overrides(instance, name, base_kls):
             assert isinstance(command, Command)
-            command.func = getattr(instance, name) # TODO: deep copy
+            command.func = getattr(instance, name)  # TODO: deep copy
             result.commands.append(command)
     result.incoming.sort(key=lambda x: x.name)
     for idx, entry in enumerate(result.incoming[:-1]):

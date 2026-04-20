@@ -326,7 +326,7 @@ class OperatorClient(ClientBase):
         vehicles = data["Vehicles"]
         assert isinstance(vehicles, list)
         for i in vehicles:
-            io_conf = IoConf.from_json(i["IoConf"])
+            io_conf = IoConf.from_json(i["IoConf"] or {})
             self._operator.on_vehicle_changed(
                 i["Id"], i["Name"], i["Connected"], io_conf
             )
