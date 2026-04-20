@@ -2,11 +2,8 @@ import logging
 import argparse
 import asyncio
 
-from aiortc import MediaStreamTrack
-from av.frame import Frame
-from av.packet import Packet
 from openocc.vehicle import Vehicle
-from openocc.client import OccClient
+from openocc.client import VehicleClient
 
 from aiortc.contrib.media import MediaPlayer
 
@@ -14,30 +11,39 @@ from aiortc.contrib.media import MediaPlayer
 async def main():
     logging.basicConfig(
         level=logging.INFO,
-        format="%(module)s - %(levelname)s - %(message)s",
+        format="%(module)-10.10s - %(levelname)-8.8s - %(message)s",
     )
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", default="imiq-occ.et.uni-magdeburg.de")
     parser.add_argument("--port", type=int, default=443)
-    parser.add_argument("--path", default="/wt-vehicle?VehicleId=tugger_train")
+    parser.add_argument("--vehicle_id", default="tugger_train")
     parser.add_argument("--insecure", action="store_true", default=False)
     args = parser.parse_args()
 
-    class DummyVehilce(Vehicle):
+    class DummyVehicle(Vehicle):
+        VEHICLE_ID = args.vehicle_id
+
         def __init__(self):
             self.player = MediaPlayer(
                 "http://download.tsi.telecom-paristech.fr/gpac/dataset/dash/uhd/mux_sources/hevcds_720p30_2M.mp4"
             )
 
-        async def get_frame(self) -> Frame | Packet:
+        def set_speed(self, value):
+            print(f"New speed: {value}")
+
+        def set_angle(self, value):
+            print(f"New angle: {value}")
+
+        def get_frame(self):
             assert self.player.video
-            return await self.player.video.recv()
+            return asyncio.run(self.player.video.recv())
 
-        def ping(self, msg: str):
-            pass
+        def emergency_halt(self):
+            logging.info("Emergency halt triggered!")
 
-    client = OccClient(args.host, args.port, args.path, args.insecure, DummyVehilce())
+
+    client = VehicleClient(args.host, args.port, args.insecure, DummyVehicle())
     await client.loop()
 
 

@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import logging
+import json
 
 from aioquic.asyncio.client import connect
 from aioquic.asyncio.protocol import QuicConnectionProtocol
@@ -96,13 +97,15 @@ async def forward_queue(source: asyncio.Queue, target: asyncio.Queue):
 
 class WebTransportClient:
     def __init__(self, host: str, port: int, path: str, insecure: bool) -> None:
-        self.stream = asyncio.Queue()
+        self.messages = asyncio.Queue()
         self.datagrams = asyncio.Queue()
         self.host = host
         self.port = port
         self.path = path
         self.insecure = insecure
-        self.protocol: Optional[H3ClientProtocol] = None
+        self._protocol: Optional[H3ClientProtocol] = None
+        self.connected = asyncio.Event()
+        self._stop_event = asyncio.Event()
 
     async def loop(self):
         config = QuicConfiguration(
@@ -121,51 +124,39 @@ class WebTransportClient:
             create_protocol=H3ClientProtocol,
         ) as protocol:
             assert isinstance(protocol, H3ClientProtocol)
-            self.protocol = protocol
-            self.protocol.request_webtransport(self.path.encode())
+            self._protocol = protocol
+            self._protocol.request_webtransport(self.path.encode())
 
-            asyncio.create_task(forward_queue(self.protocol.stream, self.stream))
-            asyncio.create_task(forward_queue(self.protocol.datagrams, self.datagrams))
+            asyncio.create_task(self._process_stream())
+            asyncio.create_task(forward_queue(self._protocol.datagrams, self.datagrams))
+            self.connected.set()
+            await self._stop_event.wait()
 
-            # Ping to keep connection alive
-            while True:
-                self.protocol.send_datagram(b"")
-                await asyncio.sleep(5)
+        self._protocol = None
 
-        self.protocol = None
+    async def _process_stream(self):
+        assert self._protocol
+        buffer = bytearray()
+        while True:
+            data = await self._protocol.stream.get()
+            for value in data:
+                if value == 0:
+                    await self.messages.put(bytes(buffer))
+                    buffer = bytearray()
+                else:
+                    # TODO: is there a more efficient way?
+                    buffer.append(value)
+
+    def stop(self):
+        self._stop_event.set()
 
     def send_datagram(self, datagram: bytes):
-        assert self.protocol
-        self.protocol.send_datagram(datagram)
+        assert self._protocol
+        self._protocol.send_datagram(datagram)
 
-    def send_stream(self, data: bytes):
-        assert self.protocol
-        self.protocol.send_stream(data)
-
-
-async def main():
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(module)s - %(levelname)s - %(message)s",
-    )
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--host", default="imiq-occ.et.uni-magdeburg.de")
-    parser.add_argument("--port", type=int, default=443)
-    parser.add_argument("--path", default="/wt-vehicle?VehicleId=tugger_train")
-    parser.add_argument("--insecure", action="store_true", default=False)
-    args = parser.parse_args()
-    client = WebTransportClient(args.host, args.port, args.path, args.insecure)
-
-    async def dump_queue(q: asyncio.Queue):
-        while True:
-            data = await q.get()
-            print(data)
-
-    asyncio.create_task(dump_queue(client.datagrams))
-    asyncio.create_task(dump_queue(client.stream))
-    await client.loop()
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
+    def send_message(self, message: str):
+        assert self._protocol
+        # TODO: ensure that message does not contain \0 already
+        data = message.encode()
+        data += b"\0"  # delimiter
+        self._protocol.send_stream(data)

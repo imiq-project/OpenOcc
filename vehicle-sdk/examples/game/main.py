@@ -1,8 +1,6 @@
-from typing import List
-
-from av.frame import Frame
 from game import Game
-from openocc.client import OccClient, Vehicle
+from openocc.client import VehicleClient, Vehicle
+from openocc.ioconf import incoming, DataType
 import threading
 import logging
 import argparse
@@ -13,7 +11,7 @@ import av
 def main():
     logging.basicConfig(
         level=logging.INFO,
-        format="%(asctime)s - %(module)s - %(levelname)s - %(message)s",
+        format="%(module)-20s - %(levelname)-8s - %(message)s",
     )
 
     parser = argparse.ArgumentParser()
@@ -30,10 +28,15 @@ def main():
             np_image = game.get_window_frame()
             return av.VideoFrame.from_ndarray(np_image, format="bgra")
 
-        def ping(self, msg: str):
-            game.ping(msg)
+        @incoming("speed", DataType.UInt64)
+        def set_speed(self, value):
+            game.set_car_speed(value)
 
-    client = OccClient(args.host, args.port, args.path, args.insecure, GameVehicle())
+        @incoming("angle", DataType.UInt64)
+        def set_angle(self, value):
+            game.set_car_angle(value)
+
+    client = VehicleClient(args.host, args.port, args.path, args.insecure, GameVehicle())
 
     t = threading.Thread(target=lambda: asyncio.run(client.loop()))
     t.start()

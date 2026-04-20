@@ -1,15 +1,28 @@
-from abc import ABC, abstractmethod
-from av.frame import Frame
-from av.packet import Packet
+from abc import ABC
 from typing import Union
+from .ioconf import outgoing, incoming, command, DataType
 
 
 class Vehicle(ABC):
 
-    @abstractmethod
-    async def get_frame(self) -> Union[Frame, Packet]:
+    VEHICLE_ID = ""
+
+    @incoming("speed", DataType.Int8)
+    def set_speed(self, value):
         pass
 
-    @abstractmethod
-    def ping(self, msg: str):
+    @incoming("angle", DataType.Int8)
+    def set_angle(self, value):
+        pass
+
+    @outgoing("front_camera", DataType.Video)
+    def get_front_camera(self):
+        pass
+
+    @outgoing("position", DataType.LatLon)
+    def get_position(self):
+        pass
+
+    @command("emergency_halt")
+    def emergency_halt(self):
         pass

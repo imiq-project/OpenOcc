@@ -4,7 +4,6 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"flag"
-	"io"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -19,12 +18,13 @@ import (
 )
 
 type Vehicle struct {
-	Id        ClientIdType  `gorm:"column:id;primaryKey"           json:"Id"`
-	Name      string        `gorm:"column:name;not null"           json:"Name"`
-	Lat       float64       `gorm:"column:lat;not null;default:0"  json:"Lat"`
-	Lon       float64       `gorm:"column:lon;not null;default:0"  json:"Lon"`
-	Connected bool          `gorm:"-"                              json:"Connected"`
-	Key       EncryptionKey `gorm:"column:key;not null;default:''" json:"-"`
+	Id        ClientIdType
+	Name      string
+	Lat       float64
+	Lon       float64
+	Connected bool
+	key       string
+	IoConf    map[string]any
 }
 
 func (Vehicle) TableName() string { return "vehicles" }
@@ -53,6 +53,42 @@ func GetEnvOrPanic(key string) string {
 	return value
 }
 
+func icdServers(expressTurnUser string, expressTurnPass string) []byte {
+	type ICECredential struct {
+		URLs       []string `json:"urls"`
+		Username   string   `json:"username"`
+		Credential string   `json:"credential"`
+	}
+	type ServersMessage struct {
+		Type       string
+		IceServers []ICECredential `json:"iceServers"`
+	}
+
+	msg := ServersMessage{
+		Type: "iceServers",
+		IceServers: []ICECredential{
+			ICECredential{
+				URLs: []string{
+					"stun:stun.l.google.com:19302",
+				},
+				Username:   "",
+				Credential: "",
+			},
+			ICECredential{
+				URLs: []string{
+					"turn:free.expressturn.com:3478?transport=udp",
+					"turn:free.expressturn.com:3478?transport=tcp",
+					"turns:free.expressturn.com:5349",
+				},
+				Username:   expressTurnUser,
+				Credential: expressTurnPass, // TODO: generate time-limited credential
+			},
+		},
+	}
+	iceMessage, _ := json.Marshal(msg)
+	return iceMessage
+}
+
 func GetEnvOrDefault(key, fallback string) string {
 	value, exists := os.LookupEnv(key)
 	if !exists {
@@ -62,8 +98,8 @@ func GetEnvOrDefault(key, fallback string) string {
 }
 
 func main() {
-	express_turn_user := GetEnvOrPanic("EXPRESS_TURN_USERNAME")
-	express_turn_pass := GetEnvOrPanic("EXPRESS_TURN_PASSWORD")
+	expressTurnUser := GetEnvOrPanic("EXPRESS_TURN_USERNAME")
+	expressTurnPass := GetEnvOrPanic("EXPRESS_TURN_PASSWORD")
 
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
@@ -164,56 +200,19 @@ func main() {
 	target, _ := url.Parse("http://client:3000")
 	proxy := httputil.NewSingleHostReverseProxy(target)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		log.Println("Proxying request for", r.URL.Path, "to", target)
+		// log.Println("Proxying request for", r.URL.Path, "to", target)
 		proxy.ServeHTTP(w, r)
 	})
 
-	// ICE Servers
-	mux.HandleFunc("/iceServers", func(w http.ResponseWriter, r *http.Request) {
-		type ICECredential struct {
-			URLs       []string `json:"urls"`
-			Username   string   `json:"username"`
-			Credential string   `json:"credential"`
-		}
-		type Response struct {
-			IceServers []ICECredential `json:"iceServers"`
-		}
-
-		response := Response{
-			IceServers: []ICECredential{
-				{
-					URLs: []string{
-						"stun:stun.l.google.com:19302",
-					},
-					Username:   "",
-					Credential: "",
-				},
-				{
-					URLs: []string{
-						"turn:free.expressturn.com:3478?transport=udp",
-						"turn:free.expressturn.com:3478?transport=tcp",
-						"turns:free.expressturn.com:5349",
-					},
-					Username:   express_turn_user,
-					Credential: express_turn_pass, // TODO: generate time-limited credential
-				},
-			},
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(response)
-	})
-
 	vehicleBroker := NewWebTransportBroker()
-	occBroker := NewWebTransportBroker()
+	operatorBroker := NewWebTransportBroker()
 
 	// Vehicle store — shared state between broker loop and API handlers
 	store := &VehicleStore{
-		vehicles:      vehicles,
-		db:            db,
-		occBroker:     &occBroker,
-		vehicleBroker: &vehicleBroker,
+		vehicles:       vehicles,
+		db:             db,
+		operatorBroker: &operatorBroker,
+		vehicleBroker:  &vehicleBroker,
 	}
 
 	// Initial status broadcast
@@ -226,6 +225,17 @@ func main() {
 	mux.HandleFunc("/wt-vehicle", func(w http.ResponseWriter, r *http.Request) {
 		// TODO: auth
 		id := r.URL.Query().Get("VehicleId")
+		vehicle, ok := store.vehicles[ClientIdType(id)]
+		if !ok {
+			http.Error(w, "unknown vehicle", http.StatusBadRequest)
+			return
+		}
+		err := json.Unmarshal([]byte(r.URL.Query().Get("IoConf")), &vehicle.IoConf)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
 		log.Println("Connection attempt by vehicle", id)
 		session, err := wtSrv.Upgrade(w, r)
 		if err != nil {
@@ -236,8 +246,13 @@ func main() {
 		vehicleBroker.HandleSession(ClientIdType(id), session)
 	})
 
+	type StatusMsg struct {
+		Type     string
+		Vehicles []Vehicle
+	}
+
 	// Serve webtransport for control centers
-	mux.HandleFunc("/wt-occ", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/wt-operator", func(w http.ResponseWriter, r *http.Request) {
 		// TODO: auth
 		id := r.URL.Query().Get("OccId")
 		session, err := wtSrv.Upgrade(w, r)
@@ -246,24 +261,12 @@ func main() {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		go occBroker.HandleSession(ClientIdType(id), session)
-	})
-
-	mux.HandleFunc("/send", func(w http.ResponseWriter, r *http.Request) {
-		recipient := r.URL.Query().Get("Recipient")
-		bytes, _ := io.ReadAll(r.Body)
-		err := vehicleBroker.sendMessage(ClientIdType(recipient), bytes)
-		if err == nil {
-			w.WriteHeader(http.StatusOK)
-		} else {
-			w.WriteHeader(http.StatusNotAcceptable)
-			log.Println(err)
-		}
+		go operatorBroker.HandleSession(ClientIdType(id), session)
 	})
 
 	// Connect the two brokers
 	type IncomingMsg struct {
-		Recipient ClientIdType
+		To ClientIdType
 	}
 	go func() {
 		for {
@@ -274,37 +277,39 @@ func main() {
 					v.Connected = true
 				}
 				store.mu.Unlock()
-				store.broadcastStatus()
-
+				vehicleBroker.sendMessage(id, icdServers(expressTurnUser, expressTurnPass))
+				statusMessage, _ := json.Marshal(StatusMsg{"status", store.snapshot()})
+				operatorBroker.broadcast("", statusMessage)
 			case id := <-vehicleBroker.Disconnected:
 				store.mu.Lock()
 				if v, ok := store.vehicles[id]; ok {
 					v.Connected = false
 				}
 				store.mu.Unlock()
-				store.broadcastStatus()
-
+				statusMessage, _ := json.Marshal(StatusMsg{"status", store.snapshot()})
+				operatorBroker.broadcast("", statusMessage)
 			case msg := <-vehicleBroker.Messages:
 				result := IncomingMsg{}
 				err := json.Unmarshal(msg.Payload, &result)
 				if err != nil {
 					log.Println("Received invalid message")
 				}
-				occBroker.sendMessage(result.Recipient, msg.Payload)
-
-			case msg := <-occBroker.Messages:
+				operatorBroker.sendMessage(result.To, msg.Payload)
+			case <-vehicleBroker.Datagrams:
+			case id := <-operatorBroker.Connected:
+				statusMessage, _ := json.Marshal(StatusMsg{"status", store.snapshot()})
+				operatorBroker.sendMessage(id, statusMessage)
+				operatorBroker.sendMessage(id, icdServers(expressTurnUser, expressTurnPass))
+			case <-operatorBroker.Disconnected:
+			case msg := <-operatorBroker.Messages:
 				result := IncomingMsg{}
 				err := json.Unmarshal(msg.Payload, &result)
 				if err != nil {
 					log.Println("Received invalid message from OCC")
 					continue
 				}
-				vehicleBroker.sendMessage(result.Recipient, msg.Payload)
-
-			case <-vehicleBroker.Datagrams:
-			case <-occBroker.Connected:
-			case <-occBroker.Disconnected:
-			case <-occBroker.Datagrams:
+				vehicleBroker.sendMessage(result.To, msg.Payload)
+			case <-operatorBroker.Datagrams:
 			}
 		}
 	}()

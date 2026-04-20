@@ -1,21 +1,20 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"log"
 	"net/http"
 	"strings"
 	"sync"
-
-	"gorm.io/gorm"
 )
 
 type VehicleStore struct {
-	mu            sync.RWMutex
-	vehicles      map[ClientIdType]*Vehicle
-	db            *gorm.DB
-	occBroker     *WebtransportBroker
-	vehicleBroker *WebtransportBroker
+	mu             sync.RWMutex
+	vehicles       map[ClientIdType]*Vehicle
+	db             *sql.DB
+	operatorBroker *WebtransportBroker
+	vehicleBroker  *WebtransportBroker
 }
 
 // snapshot returns a slice copy of all vehicles, safe to use after releasing the lock.
@@ -34,7 +33,7 @@ func (s *VehicleStore) broadcastStatus() {
 	s.mu.RUnlock()
 
 	statusMessage, _ := json.Marshal(StatusMsg{"status", snap})
-	s.occBroker.updateStatus(statusMessage)
+	s.operatorBroker.sendMessage("", statusMessage)
 }
 
 // RegisterAPIRoutes adds REST endpoints to the mux.

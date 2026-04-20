@@ -35,19 +35,10 @@ type WebtransportBroker struct {
 
 func NewWebTransportBroker() WebtransportBroker {
 	return WebtransportBroker{
-		Messages:      make(chan BrokerMessage),
-		Datagrams:     make(chan BrokerMessage),
-		Connected:     make(chan ClientIdType),
-		Disconnected:  make(chan ClientIdType),
-		statusMessage: make([]byte, 0),
-	}
-}
-
-func (h *WebtransportBroker) updateStatus(msg []byte) {
-	h.statusMessage = msg
-	// TODO: mutex
-	if len(h.statusMessage) > 0 {
-		h.broadcast("", msg)
+		Messages:     make(chan BrokerMessage),
+		Datagrams:    make(chan BrokerMessage),
+		Connected:    make(chan ClientIdType),
+		Disconnected: make(chan ClientIdType),
 	}
 }
 

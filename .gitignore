@@ -12,3 +12,4 @@ log/
 # Python
 *.pyc
 *.egg-info/
+.venv
