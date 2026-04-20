@@ -24,7 +24,7 @@ type Vehicle struct {
 	Lon       float64
 	Connected bool
 	key       string
-	IoConf    map[string]any
+	IoConf    map[string]any `gorm:"-"`
 }
 
 func (Vehicle) TableName() string { return "vehicles" }

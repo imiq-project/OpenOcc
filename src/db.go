@@ -3,7 +3,6 @@ package main
 import (
 	"crypto/rand"
 	"database/sql"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
@@ -56,12 +55,13 @@ func LoadVehicles(db *gorm.DB) (map[ClientIdType]*Vehicle, error) {
 }
 
 func InsertVehicle(db *gorm.DB, v *Vehicle) error {
-	if v.Key == "" {
+	if v.key == "" {
 		buf := make([]byte, 32)
 		if _, err := rand.Read(buf); err != nil {
 			return fmt.Errorf("generate key: %w", err)
 		}
-		v.Key = EncryptionKey(hex.EncodeToString(buf))
+		// TODO: fix
+		v.key = "" // EncryptionKey(hex.EncodeToString(buf))
 	}
 	if err := db.Create(v).Error; err != nil {
 		if errors.Is(err, gorm.ErrDuplicatedKey) {
