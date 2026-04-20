@@ -8,11 +8,14 @@ dynamic = ["version"]
 dependencies = [
   "aioquic",
   "aiortc",
-  "ursina",
   "requests",
 ]
 authors = [
   {name = "Björn Otto", email = "bjoern.otto@ovgu.de"},
 ]
 readme = "README.md"
+
+[tool.setuptools.dynamic]
+version = {attr = "openocc.__version__"}
+
 

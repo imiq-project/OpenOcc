@@ -99,6 +99,19 @@ func (h *WebtransportBroker) sendDatagram(recipient ClientIdType, payload []byte
 	return err
 }
 
+// CloseSession force-closes a client's WebTransport session and removes it from the broker.
+func (h *WebtransportBroker) CloseSession(clientId ClientIdType) {
+	value, ok := h.clients.LoadAndDelete(clientId)
+	if !ok {
+		return
+	}
+	client := value.(*WebTransportClient)
+	client.stream.CancelRead(0)
+	client.stream.CancelWrite(0)
+	client.session.CloseWithError(0, "vehicle deleted")
+	log.Println("Force-closed session for", clientId)
+}
+
 func (h *WebtransportBroker) HandleSession(clientId ClientIdType, session *webtransport.Session) {
 	if clientId == "" {
 		log.Println("Client id cannot be empty!")
