@@ -9,12 +9,16 @@ from asyncio import Future
 from aiortc import (
     RTCIceServer,
     VideoStreamTrack,
+    MediaStreamTrack,
 )
+from av.frame import Frame
+from av.packet import Packet
+
 from aiortc.sdp import candidate_from_sdp
 from openocc.webtransport import WebTransportClient
 from openocc.vehicle import Vehicle
 from openocc.operator import Operator
-from openocc.ioconf import IoConf, io_conf_for
+from openocc.ioconf import IoConf, io_conf_for, DataType
 from openocc.webrtc import WebRtcClient
 
 
@@ -40,14 +44,14 @@ class RpcException(Exception):
         self.code = code
 
 
-class VehicleVideoStream(VideoStreamTrack):
-    def __init__(self, vehicle: Vehicle) -> None:
+class CallbackVideoStream(VideoStreamTrack):
+    def __init__(self, callback: Callable[[], Frame]) -> None:
         super().__init__()
-        self.vehicle = vehicle
+        self._callback = callback
 
     async def recv(self):
         pts, time_base = await self.next_timestamp()
-        frame = await self.vehicle.get_frame()
+        frame = self._callback()
         frame.pts = pts
         frame.time_base = time_base
         return frame
@@ -65,6 +69,7 @@ class ClientBase(ABC):
         self.message_handlers: Dict[str, Callable[..., Coroutine[Any, Any, Any]]] = {
             "iceServers": self._process_ice_servers,
             "iceCandidate": self._process_ice_candidate,
+            "offer": self._process_webrtc_offer,
             "rpcRequest": self._process_rpc_request,
             "rpcResponse": self._process_rpc_response,
         }
@@ -77,12 +82,13 @@ class ClientBase(ABC):
         asyncio.create_task(self._webtransport.loop())
         await self._webtransport.connected.wait()
         logging.info("WebTransport connected")
-        await self._send_outgoing()
+        await self._send_ping()
 
-    async def _send_outgoing(self):
+    async def _send_ping(self):
         while True:
             await asyncio.sleep(5)
-            self._webtransport.send_datagram(b"")
+            payload = self.get_ping_payload()
+            self._webtransport.send_datagram(payload)
 
     async def _process_datagrams(self):
         while True:
@@ -230,31 +236,77 @@ class ClientBase(ABC):
         if self._rtc_connection is not None:
             logging.error("Cannot process offer: WebRTC connection already established")
             return
-        self._rtc_connection = WebRtcClient(self._ice_servers)
+        self._rtc_connection = WebRtcClient(
+            self._ice_servers,
+            self.get_rtc_tracks(),
+            self.on_rtc_message,
+            self.on_rtc_datagram,
+        )
         return await self._rtc_connection.process_offer(offer)
 
-    async def start_webrtc(self, vehicle_id: str):
+    async def start_webrtc(
+        self,
+        vehicle_id: str,
+    ):
         if self._rtc_connection is not None:
             logging.error("Cannot process offer: WebRTC connection already established")
             return
-        self._rtc_connection = WebRtcClient(self._ice_servers)
+        self._rtc_connection = WebRtcClient(
+            self._ice_servers,
+            self.get_rtc_tracks(),
+            self.on_rtc_message,
+            self.on_rtc_datagram,
+        )
         offer = await self._rtc_connection.generate_offer()
         answer = await self.send_rpc_request(vehicle_id, "_webrtcOffer", [offer])
         await self._rtc_connection.process_answer(answer)
+        await self._rtc_connection.connected.wait()
         logging.info("WebRTC started")
+
+    def send_webrtc_datagram(self, datagram: bytes):
+        assert self._rtc_connection
+        self._rtc_connection.send_datagram(datagram)
+
+    @abstractmethod
+    def get_ping_payload(self) -> bytes:
+        pass
+
+    def on_rtc_message(self, message: bytes):
+        # TODO: handle as RPC request
+        pass
+
+    @abstractmethod
+    def on_rtc_datagram(self, datagram: bytes):
+        pass
+
+    @abstractmethod
+    def get_rtc_tracks(self) -> List[MediaStreamTrack]:
+        pass
 
 
 class VehicleClient(ClientBase):
 
     def __init__(self, host: str, port: int, insecure: bool, vehicle: Vehicle) -> None:
         self._vehicle = vehicle
-        self._io_conf = io_conf_for(vehicle)
+        self._io_conf = io_conf_for(vehicle, Vehicle)
         path = f"/wt-vehicle?VehicleId={vehicle.VEHICLE_ID}&IoConf={json.dumps(self._io_conf.to_json())}"
         super().__init__(vehicle.VEHICLE_ID, host, port, insecure, path)
-        self.message_handlers["offer"] = self._process_webrtc_offer
 
     async def process_rpc_request(self, method: str, params):
         result = self._io_conf.invoke_command(self._vehicle, method, params)
+        return result
+
+    def get_ping_payload(self) -> bytes:
+        return b""
+
+    def on_rtc_datagram(self, datagram: bytes):
+        self._io_conf.set_incoming(self._vehicle, datagram)
+
+    def get_rtc_tracks(self) -> List[MediaStreamTrack]:
+        result = []
+        for i in self._io_conf.outgoing:
+            if i.data_type == DataType.Video:
+                result.append(CallbackVideoStream(i.func))
         return result
 
 
@@ -265,7 +317,7 @@ class OperatorClient(ClientBase):
     ) -> None:
         self._operator = operator
         self._operator_id = random.randint(0, 10**4)
-        self._io_conf = io_conf_for(operator)
+        self._io_conf = io_conf_for(operator, Operator)
         path = f"/wt-operator?OccId={self._operator_id}"
         super().__init__(str(self._operator_id), host, port, insecure, path)
         self.message_handlers["status"] = self._process_status_message
@@ -282,3 +334,12 @@ class OperatorClient(ClientBase):
     async def process_rpc_request(self, method: str, params):
         result = self._io_conf.invoke_command(self._operator, method, params)
         return result
+
+    def get_ping_payload(self) -> bytes:
+        return b""
+
+    def on_rtc_datagram(self, datagram: bytes):
+        print(f"Datagram: {datagram}")
+
+    def get_rtc_tracks(self) -> List[MediaStreamTrack]:
+        return []

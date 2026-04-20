@@ -15,7 +15,7 @@ class IoConfFromClass(unittest.TestCase):
         class MyVehicle:
             pass
 
-        conf = io_conf_for(MyVehicle())
+        conf = io_conf_for(MyVehicle(), MyVehicle)
         expected_conf = {"incoming": [], "outgoing": [], "commands": []}
         self.assertEqual(expected_conf, conf.to_json())
 
@@ -41,7 +41,7 @@ class IoConfFromClass(unittest.TestCase):
             def trigger_alarm(self):
                 pass
 
-        conf = io_conf_for(MyVehicle())
+        conf = io_conf_for(MyVehicle(), MyVehicle)
         expected_conf = {
             "incoming": [
                 {"name": "angle", "type": "uint64"},
@@ -68,7 +68,7 @@ class IoConfFromClass(unittest.TestCase):
                 pass
 
         with self.assertRaises(IoConfException):
-            io_conf_for(MyVehicle())
+            io_conf_for(MyVehicle(), MyVehicle)
 
     def test_duplicate_input(self):
         class MyVehicle:
@@ -81,7 +81,7 @@ class IoConfFromClass(unittest.TestCase):
                 pass
 
         with self.assertRaises(IoConfException):
-            io_conf_for(MyVehicle())
+            io_conf_for(MyVehicle(), MyVehicle)
 
     def test_duplicate_command(self):
         class MyVehicle:
@@ -94,7 +94,57 @@ class IoConfFromClass(unittest.TestCase):
                 pass
 
         with self.assertRaises(IoConfException):
-            io_conf_for(MyVehicle())
+            io_conf_for(MyVehicle(), MyVehicle)
+
+    def test_inheritance(self):
+        class BaseVehicle:
+            @outgoing("position", DataType.UInt64)
+            def position(self):
+                pass
+
+            @outgoing("status", DataType.Status)
+            def status(self):
+                pass
+
+            @incoming("speed", DataType.UInt64)
+            def set_speed(self):
+                pass
+
+            @incoming("angle", DataType.UInt64)
+            def set_angle(self):
+                pass
+
+            @command("alarm")
+            def trigger_alarm(self):
+                pass
+
+            @command("halt")
+            def emergency_halt(self):
+                pass
+
+        class MyVehicle(BaseVehicle):
+            def position(self):
+                pass
+
+            def set_speed(self):
+                pass
+
+            def emergency_halt(self):
+                pass
+
+        conf = io_conf_for(MyVehicle(), BaseVehicle)
+        expected_conf = {
+            "incoming": [
+                {"name": "speed", "type": "uint64"},
+            ],
+            "outgoing": [
+                {"name": "position", "type": "uint64"},
+            ],
+            "commands": [
+                {"name": "halt"},
+            ],
+        }
+        self.assertEqual(expected_conf, conf.to_json())
 
 
 class ApplyIoConf(unittest.TestCase):
@@ -121,11 +171,11 @@ class ApplyIoConf(unittest.TestCase):
                 return a + b
 
         instance = MyVehicle()
-        conf = io_conf_for(instance)
+        conf = io_conf_for(MyVehicle(), MyVehicle)
         conf.set_incoming(instance, {"angle": 10, "speed": 123})
         self.assertEqual(instance.angle, 10)
         self.assertEqual(instance.speed, 123)
-        out = conf.get_outgoing(instance, ["position", "status"])
+        out = conf.make_incoming(instance, ["position", "status"])
         self.assertEqual(len(out), 2)
         self.assertEqual(out["position"], 42)
         self.assertEqual(out["status"], 100)
