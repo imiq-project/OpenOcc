@@ -22,7 +22,7 @@ type Vehicle struct {
 	Name      string
 	Lat       float64
 	Lon       float64
-	Connected bool
+	Connected bool `gorm:"-"`
 	key       string
 	IoConf    map[string]any `gorm:"-"`
 }
