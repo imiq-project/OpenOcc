@@ -1,4 +1,4 @@
-const BASE = process.env.NEXT_PUBLIC_OCC_SERVER ?? "https://localhost";
+const BASE = process.env.NEXT_PUBLIC_OCC_SERVER ?? `https://${window.location.host}`;
 
 export interface VehiclePayload {
   Id: string;

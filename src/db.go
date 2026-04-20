@@ -61,7 +61,7 @@ func InsertVehicle(db *gorm.DB, v *Vehicle) error {
 			return fmt.Errorf("generate key: %w", err)
 		}
 		// TODO: fix
-		v.key = "" // EncryptionKey(hex.EncodeToString(buf))
+		v.key = "unset" // EncryptionKey(hex.EncodeToString(buf))
 	}
 	if err := db.Create(v).Error; err != nil {
 		if errors.Is(err, gorm.ErrDuplicatedKey) {
