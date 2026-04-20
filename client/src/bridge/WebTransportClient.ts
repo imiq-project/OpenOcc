@@ -62,7 +62,7 @@ export class WebTransportClient {
     occId?: string,
   ) {
     this.occId = occId ?? `occ_${Math.floor(Math.random() * 100_000)}`;
-    this.serverUrl = `https://${host}/wt-occ?OccId=${this.occId}`;
+    this.serverUrl = `https://${host}/wt-operator?OccId=${this.occId}`;
   }
 
   on<K extends keyof WebTransportEventMap>(

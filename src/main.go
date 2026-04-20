@@ -189,19 +189,19 @@ func main() {
 	target, _ := url.Parse("http://client:3000")
 	proxy := httputil.NewSingleHostReverseProxy(target)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		log.Println("Proxying request for", r.URL.Path, "to", target)
+		// log.Println("Proxying request for", r.URL.Path, "to", target)
 		proxy.ServeHTTP(w, r)
 	})
 
 	vehicleBroker := NewWebTransportBroker()
-	occBroker := NewWebTransportBroker()
+	operatorBroker := NewWebTransportBroker()
 
 	// Vehicle store — shared state between broker loop and API handlers
 	store := &VehicleStore{
-		vehicles:      vehicles,
-		db:            db,
-		occBroker:     &occBroker,
-		vehicleBroker: &vehicleBroker,
+		vehicles:       vehicles,
+		db:             db,
+		operatorBroker: &operatorBroker,
+		vehicleBroker:  &vehicleBroker,
 	}
 
 	// Initial status broadcast
@@ -240,8 +240,6 @@ func main() {
 		Vehicles []Vehicle
 	}
 
-	operatorBroker := NewWebTransportBroker()
-
 	// Serve webtransport for control centers
 	mux.HandleFunc("/wt-operator", func(w http.ResponseWriter, r *http.Request) {
 		// TODO: auth
@@ -270,7 +268,7 @@ func main() {
 				store.mu.Unlock()
 				vehicleBroker.sendMessage(id, icdServers(expressTurnUser, expressTurnPass))
 				statusMessage, _ := json.Marshal(StatusMsg{"status", store.snapshot()})
-				occBroker.broadcast("", statusMessage)
+				operatorBroker.broadcast("", statusMessage)
 			case id := <-vehicleBroker.Disconnected:
 				store.mu.Lock()
 				if v, ok := store.vehicles[id]; ok {
@@ -278,21 +276,21 @@ func main() {
 				}
 				store.mu.Unlock()
 				statusMessage, _ := json.Marshal(StatusMsg{"status", store.snapshot()})
-				occBroker.broadcast("", statusMessage)
+				operatorBroker.broadcast("", statusMessage)
 			case msg := <-vehicleBroker.Messages:
 				result := IncomingMsg{}
 				err := json.Unmarshal(msg.Payload, &result)
 				if err != nil {
 					log.Println("Received invalid message")
 				}
-				occBroker.sendMessage(result.To, msg.Payload)
+				operatorBroker.sendMessage(result.To, msg.Payload)
 			case <-vehicleBroker.Datagrams:
-			case id := <-occBroker.Connected:
+			case id := <-operatorBroker.Connected:
 				statusMessage, _ := json.Marshal(StatusMsg{"status", store.snapshot()})
 				operatorBroker.sendMessage(id, statusMessage)
 				operatorBroker.sendMessage(id, icdServers(expressTurnUser, expressTurnPass))
-			case <-occBroker.Disconnected:
-			case msg := <-occBroker.Messages:
+			case <-operatorBroker.Disconnected:
+			case msg := <-operatorBroker.Messages:
 				result := IncomingMsg{}
 				err := json.Unmarshal(msg.Payload, &result)
 				if err != nil {
@@ -300,7 +298,7 @@ func main() {
 					continue
 				}
 				vehicleBroker.sendMessage(result.To, msg.Payload)
-			case <-occBroker.Datagrams:
+			case <-operatorBroker.Datagrams:
 			}
 		}
 	}()
