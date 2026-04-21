@@ -49,13 +49,13 @@ class GamepadService {
         requestAnimationFrame(() => this.loop())
 
         // find angle first as it can be negative
-        let speed = 0
+        let angle = 0
         switch (this.config.wheelState) {
             case ConfigState.Axis:
-                speed = gp.axes[this.config.wheelIdx]
+                angle = gp.axes[this.config.wheelIdx]
                 break;
             case ConfigState.Button:
-                speed = gp.buttons[this.config.wheelIdx].value
+                angle = gp.buttons[this.config.wheelIdx].value
                 break;
             case ConfigState.Unknown:
                 for (let idx = 0; idx < gp.axes.length; ++idx) {
@@ -73,13 +73,13 @@ class GamepadService {
         }
 
         // second search for speed input
-        let angle = 0
+        let speed = 0
         switch (this.config.pedalState) {
             case ConfigState.Axis:
-                angle = gp.axes[this.config.pedalIdx]
+                speed = gp.axes[this.config.pedalIdx]
                 break;
             case ConfigState.Button:
-                angle = gp.buttons[this.config.pedalIdx].value
+                speed = gp.buttons[this.config.pedalIdx].value
                 break;
             case ConfigState.Unknown:
                 if (this.config.wheelState != ConfigState.Unknown) {
@@ -114,7 +114,7 @@ class GamepadService {
             default:
                 break;
         }
-        this.onchange(speed, angle)
+        this.onchange(angle, speed)
     }
 }
 
