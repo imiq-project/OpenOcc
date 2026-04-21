@@ -15,6 +15,7 @@ import { StateMachine, type Mode } from "@/bridge/StateMachine";
 import { LatencyMonitor } from "@/bridge/LatencyMonitor";
 import { TwistSender } from "@/bridge/TwistSender";
 import { getActiveMission } from "@/helper/missions";
+import { useGamepad } from "@/hooks/useGamepad";
 
 export type { Vehicle } from "@/bridge/WebTransportClient";
 
@@ -125,7 +126,7 @@ export const OCCBridgeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const latencyRef = useRef<LatencyMonitor | null>(null);
     const twistRef = useRef<TwistSender | null>(null);
     const rtcCleanupsRef = useRef<(() => void)[]>([]);
-
+    const gamepad = useGamepad();
 
     const logEvent = useCallback((severity: AlertSeverity | string, category: string, message: string) => {
         setEventLog(prev => [...prev, {
@@ -352,6 +353,7 @@ export const OCCBridgeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const handleSendCmdVel = useCallback((linear: number, angular: number) => {
         twistRef.current?.send(linear, angular);
     }, []);
+    gamepad.onchange = handleSendCmdVel
 
     const requestMode = useCallback((target: Mode) => {
         try {
