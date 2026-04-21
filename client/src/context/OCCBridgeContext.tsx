@@ -157,21 +157,12 @@ export const OCCBridgeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             setConnected(false);
             logEvent("WARNING", "system", "WebTransport disconnected from OCC server");
         });
-        const unsubAlert = wt.on("alert", (alert) => {
-            logEvent(
-                alert.Severity.toUpperCase(),
-                "robot",
-                `[${alert.Code}] ${alert.Message}`,
-            );
-        });
-
         wt.connect();
 
         return () => {
             unsubVehicles();
             unsubConnected();
             unsubDisconnected();
-            unsubAlert();
             wt.disconnect();
             wtRef.current = null;
         };
@@ -287,7 +278,9 @@ export const OCCBridgeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             return;
         }
 
-        const rtc = new WebRTCClient(vehicleId, wt);
+        const vehicle = vehicles.find(vehicle => vehicle.Id == vehicleId)
+        if (!vehicle) return;
+        const rtc = new WebRTCClient(vehicle!, wt);
         rtcRef.current = rtc;
 
         const latency = new LatencyMonitor(rtc, sm);

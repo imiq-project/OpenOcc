@@ -254,7 +254,7 @@ func main() {
 	// Serve webtransport for control centers
 	mux.HandleFunc("/wt-operator", func(w http.ResponseWriter, r *http.Request) {
 		// TODO: auth
-		id := r.URL.Query().Get("OccId")
+		id := r.URL.Query().Get("OperatorId")
 		session, err := wtSrv.Upgrade(w, r)
 		if err != nil {
 			log.Printf("upgrading failed: %s", err)

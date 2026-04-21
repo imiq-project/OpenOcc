@@ -25,7 +25,8 @@ class WebRtcClient:
     def __init__(
         self,
         ice_servers: List[RTCIceServer],
-        tracks: List[MediaStreamTrack],
+        outgoing_tracks: List[MediaStreamTrack],
+        num_incoming_tracks: int,
         on_message: Callable[[bytes], None],
         on_datagram: Callable[[bytes], None],
     ) -> None:
@@ -58,7 +59,12 @@ class WebRtcClient:
         self.connected = asyncio.Event()
         self._on_datagram = on_datagram
         self._on_message = on_message
-        self._tracks = tracks
+
+        logging.info(f"Tracks: {len(outgoing_tracks)} outgoing, {num_incoming_tracks} incoming")
+        for track in outgoing_tracks:
+            self._rtc_connection.addTrack(track)
+        for _ in range(num_incoming_tracks):
+            self._rtc_connection.addTransceiver('video', 'recvonly')
 
     async def add_ice_candidate(self, sdp: str, sdp_mid, sdp_mline_index):
         logging.info("New ice candidate")
@@ -78,9 +84,9 @@ class WebRtcClient:
         logging.info("Generating offer")
         assert self._signaling_state == SignalingState.Initialized
         self.datagram_channel = self._rtc_connection.createDataChannel(
-            "ping", ordered=False, maxRetransmits=0
+            "datagrams", ordered=False, maxRetransmits=0,
         )
-        self.messages_channel = self._rtc_connection.createDataChannel("command")
+        self.messages_channel = self._rtc_connection.createDataChannel("messages")
         offer = await self._rtc_connection.createOffer()
         assert offer.type == "offer"
         await self._rtc_connection.setLocalDescription(offer)
@@ -94,26 +100,27 @@ class WebRtcClient:
         @self._rtc_connection.on("datachannel")
         def on_datachannel(channel: RTCDataChannel):
             logging.info(f"Data channel received: {channel.label}")
-            if channel.label == "ping":
+            if channel.label == "datagrams":
                 self.datagram_channel = channel
 
                 @channel.on("message")
-                def on_message(message: bytes):
+                def on_message(message: bytes|str):
+                    if isinstance(message, str):
+                        message = message.encode()
                     self._on_datagram(message)
 
-            elif channel.label == "command":
+            elif channel.label == "messages":
                 self.messages_channel = channel
 
                 @channel.on("message")
-                def on_message(message: bytes):
+                def on_message(message: bytes|str):
+                    if isinstance(message, str):
+                        message = message.encode()
                     self._on_message(message)
 
             else:
                 logging.error("Invalid channel id")
                 return
-
-        for track in self._tracks:
-            self._rtc_connection.addTrack(track)
 
         await self._rtc_connection.setRemoteDescription(
             RTCSessionDescription(type="offer", sdp=offer)

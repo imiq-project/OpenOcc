@@ -68,12 +68,11 @@ class ClientBase(ABC):
         self._ice_servers: List[RTCIceServer] = []
         self.message_handlers: Dict[str, Callable[..., Coroutine[Any, Any, Any]]] = {
             "iceServers": self._process_ice_servers,
-            "iceCandidate": self._process_ice_candidate,
-            "offer": self._process_webrtc_offer,
             "rpcRequest": self._process_rpc_request,
             "rpcResponse": self._process_rpc_response,
         }
         self._next_rpc_id = 1
+        # TODO: each sender must have its own queue as ids are not coordinated
         self._rpc_waiters: Dict[int, Future[Any]] = {}
 
     async def loop(self):
@@ -126,13 +125,11 @@ class ClientBase(ABC):
         ]
         logging.info(f"Received {len(self._ice_servers)} ICE servers")
 
-    async def _process_ice_candidate(self, ice: dict):
+    async def _process_ice_candidate(self, payload: dict):
         if self._rtc_connection is None:
             logging.error("Cannot process ice candidate: no offer received")
             return
         logging.info("New ice candidate")
-        payload = ice["Candidate"]
-        assert isinstance(payload, dict)
         sdp = payload["candidate"]
         sdp_mid = payload.get("sdpMid")
         sdp_mline_index = payload.get("sdpMLineIndex")
@@ -202,8 +199,10 @@ class ClientBase(ABC):
         )
 
         try:
-            if method == "_webrtcOffer":
+            if method == "_webRtcOffer":
                 result = await self._process_webrtc_offer(*params)
+            elif method == "_iceCandidate":
+                result = await self._process_ice_candidate(*params)
             else:
                 result = await self.process_rpc_request(method, params)
             logging.info(f"Sending result for id={id_}: {_dump(result)}")
@@ -239,6 +238,7 @@ class ClientBase(ABC):
         self._rtc_connection = WebRtcClient(
             self._ice_servers,
             self.get_rtc_tracks(),
+            0, # TODO
             self.on_rtc_message,
             self.on_rtc_datagram,
         )
@@ -254,11 +254,12 @@ class ClientBase(ABC):
         self._rtc_connection = WebRtcClient(
             self._ice_servers,
             self.get_rtc_tracks(),
+            2, # todo
             self.on_rtc_message,
             self.on_rtc_datagram,
         )
         offer = await self._rtc_connection.generate_offer()
-        answer = await self.send_rpc_request(vehicle_id, "_webrtcOffer", [offer])
+        answer = await self.send_rpc_request(vehicle_id, "_webRtcOffer", [offer])
         await self._rtc_connection.process_answer(answer)
         await self._rtc_connection.connected.wait()
         logging.info("WebRTC started")
@@ -305,8 +306,9 @@ class VehicleClient(ClientBase):
     def get_rtc_tracks(self) -> List[MediaStreamTrack]:
         result = []
         for i in self._io_conf.outgoing:
-            if i.data_type == DataType.Video:
-                result.append(CallbackVideoStream(i.func))
+            for dt in i.data_types:
+                if dt == DataType.Video:
+                    result.append(CallbackVideoStream(i.func))
         return result
 
 
@@ -318,7 +320,7 @@ class OperatorClient(ClientBase):
         self._operator = operator
         self._operator_id = random.randint(0, 10**4)
         self._io_conf = io_conf_for(operator, Operator)
-        path = f"/wt-operator?OccId={self._operator_id}"
+        path = f"/wt-operator?OperatorId={self._operator_id}"
         super().__init__(str(self._operator_id), host, port, insecure, path)
         self.message_handlers["status"] = self._process_status_message
 

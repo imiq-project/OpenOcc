@@ -1,4 +1,5 @@
-import type { WebTransportClient } from "./WebTransportClient";
+import type { IoParam, WebTransportClient } from "./WebTransportClient";
+import { Vehicle } from "./WebTransportClient";
 
 export type ConnectionState =
   | "new"
@@ -19,20 +20,19 @@ type Listener<T> = (data: T) => void;
 
 export class WebRTCClient {
   private pc: RTCPeerConnection | null = null;
-  private commandsChannel: RTCDataChannel | null = null;
-  private telemetryChannel: RTCDataChannel | null = null;
-  private statusChannel: RTCDataChannel | null = null;
+  private datagramsChannel: RTCDataChannel | null = null;
+  private messagesChannel: RTCDataChannel | null = null;
 
   private wtUnsubscribers: (() => void)[] = [];
 
-  private readonly vehicleId: string;
+  private readonly vehicle: Vehicle;
   private readonly wt: WebTransportClient;
 
   // eslint-disable-next-line
   private listeners: Record<string, Set<Function>> = {};
 
-  constructor(vehicleId: string, wt: WebTransportClient) {
-    this.vehicleId = vehicleId;
+  constructor(vehicle: Vehicle, wt: WebTransportClient) {
+    this.vehicle = vehicle;
     this.wt = wt;
   }
 
@@ -67,24 +67,26 @@ export class WebRTCClient {
       return;
     }
 
-    console.log(`[WebRTC] Starting connection to vehicle ${this.vehicleId}`);
-
-    const servers = await fetch("/iceServers")
+    console.log(`[WebRTC] Starting connection to vehicle ${this.vehicle.Id}`);
 
     this.pc = new RTCPeerConnection({
-      iceServers: (await servers.json()).iceServers,
+      iceServers: this.wt.getIceServers(),
     });
 
-    this.pc.addTransceiver("video", { direction: "recvonly" }); // camera
-    this.pc.addTransceiver("video", { direction: "recvonly" }); // depth
+    // declare transceivers beforehand to get a stable SDP and avoid some python/aiortc bugs
+    for (const out of this.vehicle.IoConf.outgoing) {
+      for (const i of out.types) {
+        if (i == "video") {
+          this.pc.addTransceiver("video", { direction: "recvonly" });
+        }
+      }
+    }
 
-    this.commandsChannel = this.pc.createDataChannel("commands", {
+    this.datagramsChannel = this.pc.createDataChannel("datagrams", {
       ordered: false,
       maxRetransmits: 0,
     });
-
-    this.telemetryChannel = this.pc.createDataChannel("telemetry");
-    this.statusChannel = this.pc.createDataChannel("status");
+    this.messagesChannel = this.pc.createDataChannel("messages");
 
     this.bindDataChannelEvents();
     this.bindPeerConnectionEvents();
@@ -92,69 +94,92 @@ export class WebRTCClient {
 
     const offer = await this.pc.createOffer();
     await this.pc.setLocalDescription(offer);
-    this.wt.sendOffer(this.vehicleId, offer.sdp!);
+    const sdp = await this.wt.sendRpcRequest(this.vehicle.Id, "_webRtcOffer", [offer.sdp!])
+    await this.pc.setRemoteDescription({ type: "answer", sdp: sdp as string });
+    console.log("[WebRTC] Remote description set");
   }
 
   disconnect(): void {
-    console.log(`[WebRTC] Disconnecting from vehicle ${this.vehicleId}`);
+    console.log(`[WebRTC] Disconnecting from vehicle ${this.vehicle.Id}`);
     this.cleanup();
     this.emit("connectionState", "closed");
   }
 
+  private makeIncoming(incoming: Array<IoParam>, values: Record<string, number[]>): Uint8Array {
+    // 1) First pass: compute total size
+    let totalLength = 0;
+
+    for (const param of incoming) {
+      totalLength += param.types.length * 8;
+      // worst-case assumption (Int64/UInt64 = 8 bytes)
+    }
+
+    const result = new Uint8Array(totalLength);
+    const view = new DataView(result.buffer);
+
+    let offset = 0;
+
+    // 2) Second pass: write directly
+    for (const param of incoming) {
+      const paramValues = values[param.name];
+
+      for (let i = 0; i < param.types.length; i++) {
+        const dt = param.types[i];
+        const value = paramValues[i];
+
+        switch (dt) {
+          case 'int8':
+            view.setInt8(offset, value);
+            offset += 1;
+            break;
+
+          case 'uint8':
+            view.setUint8(offset, value);
+            offset += 1;
+            break;
+
+          case 'int64':
+            view.setBigInt64(offset, BigInt(value), false); // big-endian
+            offset += 8;
+            break;
+
+          case 'uint64':
+            view.setBigUint64(offset, BigInt(value), false); // big-endian
+            offset += 8;
+            break;
+
+          default:
+            throw new Error(`Invalid data type ${dt}`);
+        }
+      }
+    }
+
+    // 3) Trim to actual used size (since we overallocated)
+    return result.subarray(0, offset);
+  }
+
   sendTwist(linearX: number, angularZ: number): void {
-    if (!this.commandsChannel || this.commandsChannel.readyState !== "open") {
+    if (!this.datagramsChannel || this.datagramsChannel.readyState !== "open") {
       return;
     }
-    this.commandsChannel.send(
-      JSON.stringify({ type: "twist", linear_x: linearX, angular_z: angularZ }),
-    );
+    const bytes = this.makeIncoming(this.vehicle.IoConf.incoming, { 'motion': [linearX * 127, angularZ * 127] })
+    this.datagramsChannel.send(bytes)
   }
 
   sendPing(): void {
-    if (!this.commandsChannel || this.commandsChannel.readyState !== "open") {
+    if (!this.datagramsChannel || this.datagramsChannel.readyState !== "open") {
       return;
     }
-    this.commandsChannel.send(`ping:${Date.now()}`);
+    // this.datagramsChannel.send(`ping:${Date.now()}`);
   }
 
   private bindDataChannelEvents(): void {
-    this.telemetryChannel!.onmessage = (ev) => {
-      this.parseAndEmit("telemetry", ev.data);
-    };
-
-    this.statusChannel!.onmessage = (ev) => {
+    this.messagesChannel!.onmessage = (ev) => {
       this.parseAndEmit("status", ev.data);
     };
 
-    this.commandsChannel!.onmessage = (ev) => {
+    this.datagramsChannel!.onmessage = (ev) => {
       const msg = String(ev.data);
-      if (msg.startsWith("pong:")) {
-        this.parseAndEmit("telemetry", JSON.stringify({ type: "pong", ts: msg.slice(5) }));
-      }
-    };
-
-    this.pc!.ondatachannel = (ev) => {
-      const ch = ev.channel;
-      console.log(`[WebRTC] Remote data channel: ${ch.label}`);
-      switch (ch.label) {
-        case "telemetry":
-          this.telemetryChannel = ch;
-          ch.onmessage = (e) => this.parseAndEmit("telemetry", e.data);
-          break;
-        case "status":
-          this.statusChannel = ch;
-          ch.onmessage = (e) => this.parseAndEmit("status", e.data);
-          break;
-        case "commands":
-          this.commandsChannel = ch;
-          ch.onmessage = (e) => {
-            const msg = String(e.data);
-            if (msg.startsWith("pong:")) {
-              this.parseAndEmit("telemetry", JSON.stringify({ type: "pong", ts: msg.slice(5) }));
-            }
-          };
-          break;
-      }
     };
   }
 
@@ -179,18 +204,11 @@ export class WebRTCClient {
 
     pc.onicecandidate = (ev) => {
       if (!ev.candidate) return;
-      this.wt.sendIceCandidate(this.vehicleId, ev.candidate.toJSON());
+      this.wt.sendRpcRequest(this.vehicle.Id, "_iceCandidate", [ev.candidate.toJSON()])
     };
   }
 
   private bindSignalingEvents(): void {
-    const unsubAnswer = this.wt.on("answer", async (msg) => {
-      if (!this.pc) return;
-      await this.pc.setRemoteDescription({ type: "answer", sdp: msg.Sdp });
-      console.log("[WebRTC] Remote description set");
-    });
-    this.wtUnsubscribers.push(unsubAnswer);
-
     const unsubIce = this.wt.on("iceCandidate", async (msg) => {
       if (!this.pc) return;
       await this.pc.addIceCandidate(new RTCIceCandidate(msg.Candidate));
@@ -217,12 +235,12 @@ export class WebRTCClient {
     }
     this.wtUnsubscribers = [];
 
-    this.commandsChannel?.close();
+    this.datagramsChannel?.close();
     this.telemetryChannel?.close();
-    this.statusChannel?.close();
-    this.commandsChannel = null;
+    this.messagesChannel?.close();
+    this.datagramsChannel = null;
     this.telemetryChannel = null;
-    this.statusChannel = null;
+    this.messagesChannel = null;
 
     if (this.pc) {
       this.pc.ontrack = null;

@@ -41,7 +41,7 @@ const TeleoperationScene: React.FC = () => {
     return (
         <div className="h-full w-full relative bg-occ-deep">
             {/* 3D Canvas */}
-            <Canvas shadows scene={{background: new Color().setHSL(0.6, 0, 1)}}>
+            {/* <Canvas shadows scene={{background: new Color().setHSL(0.6, 0, 1)}}>
                 <hemisphereLight
                     args={[0xffffff, 0xffffff, 2.0]}
                     color={new Color().setHSL(0.6, 1, 0.6)}
@@ -97,7 +97,7 @@ const TeleoperationScene: React.FC = () => {
                             color="#ff6600" />
                     </>
                 )}
-            </Canvas>
+            </Canvas> */}
 
             {/* Re-center / Free camera button */}
             <button

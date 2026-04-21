@@ -1,16 +1,25 @@
+import { Future } from "@/helper/Future";
+
+
+export interface IoParam {
+  name: string
+  types: string
+}
+
+export interface Command {
+  name: string
+}
 export interface Vehicle {
   Id: string;
   Name: string;
   Lat: number;
   Lon: number;
   Connected: boolean;
-}
-
-export interface AnswerMessage {
-  Type: "answer";
-  Sdp: string;
-  Recipient: string;
-  [key: string]: unknown;
+  IoConf: {
+    incoming: Array<IoParam>,
+    outgoing: Array<IoParam>,
+    commands: Array<Command>,
+  }
 }
 
 export interface IceCandidateMessage {
@@ -18,6 +27,17 @@ export interface IceCandidateMessage {
   Candidate: RTCIceCandidateInit;
   Recipient: string;
   [key: string]: unknown;
+}
+
+export interface RpcResponse {
+  Type: "rpcResponse"
+  From: string,
+  To: string,
+  Payload:  {
+    jsonrpc: "2.0"
+    id: number,
+    result: any
+  }
 }
 
 export interface AlertMessage {
@@ -32,9 +52,7 @@ export interface AlertMessage {
 
 export type WebTransportEventMap = {
   vehicleList: Vehicle[];
-  answer: AnswerMessage;
   iceCandidate: IceCandidateMessage;
-  alert: AlertMessage;
   connected: void;
   disconnected: void;
 };
@@ -50,8 +68,11 @@ export class WebTransportClient {
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private destroyed = false;
+  private iceServers: RTCIceServer[] = []
+  private nextRpcId = 0;
+  private rpcWaiters: Map<number, Future<any>> = new Map()
 
-  readonly occId: string;
+  readonly operatorId: string;
   private readonly serverUrl: string;
 
   // eslint-disable-next-line
@@ -59,10 +80,10 @@ export class WebTransportClient {
 
   constructor(
     host: string,
-    occId?: string,
+    operatorId?: string,
   ) {
-    this.occId = occId ?? `occ_${Math.floor(Math.random() * 100_000)}`;
-    this.serverUrl = `https://${host}/wt-operator?OccId=${this.occId}`;
+    this.operatorId = operatorId ?? `occ_${Math.floor(Math.random() * 100_000)}`;
+    this.serverUrl = `https://${host}/wt-operator?OperatorId=${this.operatorId}`;
   }
 
   on<K extends keyof WebTransportEventMap>(
@@ -90,6 +111,10 @@ export class WebTransportClient {
     this.listeners[event]?.forEach((fn) => fn(data));
   }
 
+  getIceServers() {
+    return this.iceServers
+  }
+
   async connect(): Promise<void> {
     if (this.transport) return;
     this.destroyed = false;
@@ -101,7 +126,7 @@ export class WebTransportClient {
     }
 
     try {
-      console.log(`[WT] Connecting as ${this.occId}…`);
+      console.log(`[WT] Connecting as ${this.operatorId}…`);
       this.transport = new WebTransport(this.serverUrl);
 
       this.transport.closed
@@ -127,21 +152,24 @@ export class WebTransportClient {
     console.log("[WT] Disconnected (manual)");
   }
 
-  sendOffer(vehicleId: string, sdp: string): void {
+  async sendRpcRequest(vehicleId: string, method: string, params: Array<any>, timeoutMs?: number) {
+    this.nextRpcId++
+    const future = new Future()
+    this.rpcWaiters.set(this.nextRpcId, future)
+    console.log(`[RPC] Send request for ${method} with id=${this.nextRpcId}`)
     this.sendJson({
-      Type: "offer",
-      Recipient: vehicleId,
-      OccId: this.occId,
-      Sdp: sdp,
-    });
-  }
-
-  sendIceCandidate(vehicleId: string, candidate: RTCIceCandidateInit): void {
-    this.sendJson({
-      Type: "ice",
-      Recipient: vehicleId,
-      Candidate: candidate,
-    });
+      "Type": "rpcRequest",
+      "From": this.operatorId,
+      "To": vehicleId,
+      "Payload": {
+        "jsonrpc": "2.0",
+        "method": method,
+        "params": params,
+        "id": this.nextRpcId,
+      },
+    })
+    const result = await future.wait(timeoutMs ?? 10_000)
+    return result
   }
 
   private sendJson(obj: Record<string, unknown>): void {
@@ -205,14 +233,22 @@ export class WebTransportClient {
       case "status":
         this.emit("vehicleList", data.Vehicles as Vehicle[]);
         break;
-      case "answer":
-        this.emit("answer", data as unknown as AnswerMessage);
+      case "rpcResponse":
+        const msg = data as unknown as RpcResponse;
+        const future = this.rpcWaiters.get(msg.Payload.id)
+        console.log(`[RPC] Received result for ${msg.Payload.id}`)
+        if(future) {
+          this.rpcWaiters.delete(msg.Payload.id)
+          future.resolve(msg.Payload.result)
+        } else {
+          console.warn("Received unknown rpc response for id", msg.Payload.id)
+        }
         break;
       case "ice":
         this.emit("iceCandidate", data as unknown as IceCandidateMessage);
         break;
-      case "alert":
-        this.emit("alert", data as unknown as AlertMessage);
+      case "iceServers":
+        this.iceServers = (data as any).iceServers as RTCIceServer[]
         break;
       default:
         console.warn("[WT] Unknown message type:", data.Type);
@@ -224,10 +260,10 @@ export class WebTransportClient {
     const writer = this.transport.datagrams.writable.getWriter();
     const ping = new Uint8Array([0]);
 
-    writer.write(ping).catch(() => {});
+    writer.write(ping).catch(() => { });
 
     this.heartbeatTimer = setInterval(() => {
-      writer.write(ping).catch(() => {});
+      writer.write(ping).catch(() => { });
     }, HEARTBEAT_INTERVAL_MS);
   }
 
