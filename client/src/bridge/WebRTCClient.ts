@@ -163,7 +163,7 @@ export class WebRTCClient {
       return;
     }
     const bytes = this.makeIncoming(this.vehicle.IoConf.incoming, { 'motion': [linearX * 127, angularZ * 127] })
-    this.datagramsChannel.send(bytes)
+    this.datagramsChannel.send(bytes as any)
   }
 
   sendPing(): void {
@@ -236,10 +236,8 @@ export class WebRTCClient {
     this.wtUnsubscribers = [];
 
     this.datagramsChannel?.close();
-    this.telemetryChannel?.close();
     this.messagesChannel?.close();
     this.datagramsChannel = null;
-    this.telemetryChannel = null;
     this.messagesChannel = null;
 
     if (this.pc) {
