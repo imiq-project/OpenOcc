@@ -114,7 +114,7 @@ class GamepadService {
             default:
                 break;
         }
-        this.onchange(angle, speed)
+        this.onchange(speed, angle)
     }
 }
 
