@@ -47,12 +47,16 @@ export default function LoginPage() {
         }
     }, [user, phase]);
 
-    // Auto-select if only one vehicle
+    // Auto-select and auto-connect if only one vehicle
     useEffect(() => {
-        if (phase === "vehicle" && bridge.vehicles.length === 1 && !selectedVehicle) {
-            setSelectedVehicle(bridge.vehicles[0].Id);
-        }
-    }, [phase, bridge.vehicles, selectedVehicle]);
+        if (phase !== "vehicle" || selectedVehicle || bridge.vehicles.length !== 1) return;
+        const id = bridge.vehicles[0].Id;
+        setSelectedVehicle(id);
+        bridge.selectVehicle(id);
+        setPhase("connecting");
+        const t = setTimeout(() => router.push("/dashboard"), 2000);
+        return () => clearTimeout(t);
+    }, [phase, bridge.vehicles, selectedVehicle, bridge, router]);
 
     const handleLogin = () => {
         setError("");
@@ -75,10 +79,6 @@ export default function LoginPage() {
         }
         setPhase("connecting");
         setTimeout(() => router.push("/dashboard"), 2000);
-    };
-
-    const handleSkip = () => {
-        router.push("/dashboard");
     };
 
     // ── Splash Screen ──────────────────────────────────────
@@ -248,14 +248,6 @@ export default function LoginPage() {
                                 isDisabled={!selectedVehicle}
                             >
                                 Connect
-                            </Button>
-                            <Button
-                                variant="light"
-                                size="sm"
-                                onPress={handleSkip}
-                                className="w-full"
-                            >
-                                Skip — connect later
                             </Button>
                         </>
                     )}

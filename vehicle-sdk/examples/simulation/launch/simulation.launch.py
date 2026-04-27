@@ -33,7 +33,7 @@ def generate_launch_description():
         cmd=['ros2', 'run', 'imiq_vehicle', 'occ',
              '--host', 'imiq-occ.et.uni-magdeburg.de',
              '--port', '443',
-             '--path', '/wt-vehicle?VehicleId=husky'],
+             '--path', '/wt-vehicle?VehicleId=husky&IoConf=%7B%7D'],
         output='screen',
         condition=IfCondition(LaunchConfiguration('with_occ')),
     )

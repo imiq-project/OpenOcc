@@ -265,23 +265,26 @@ export const OCCBridgeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }, [logEvent]);
 
 
-    // --- Vehicle selection: setup/teardown WebRTC ---
+    // --- Vehicle selection: just records intent ---
     const selectVehicle = useCallback((vehicleId: string | null) => {
         setSelectedVehicleId(vehicleId);
-        teardownRtc();
+    }, []);
 
-        if (!vehicleId) return;
-
-        const wt = wtRef.current;
-        const sm = smRef.current;
-        if (!wt || !sm) {
-            console.warn("[OCCBridge] Cannot connect — WebTransport or StateMachine not ready");
+    // --- WebRTC lifecycle: starts when both selection and vehicle list are ready ---
+    useEffect(() => {
+        if (!selectedVehicleId) {
+            teardownRtc();
             return;
         }
 
-        const vehicle = vehicles.find(vehicle => vehicle.Id == vehicleId)
-        if (!vehicle) return;
-        const rtc = new WebRTCClient(vehicle!, wt);
+        const vehicle = vehicles.find(v => v.Id === selectedVehicleId);
+        if (!vehicle) return; // wait for vehicle list to include this id
+
+        const wt = wtRef.current;
+        const sm = smRef.current;
+        if (!wt || !sm) return;
+
+        const rtc = new WebRTCClient(vehicle, wt);
         rtcRef.current = rtc;
 
         const latency = new LatencyMonitor(rtc, sm);
@@ -295,10 +298,10 @@ export const OCCBridgeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             setWebrtcConnected(isConnected);
             setWebrtcState(state);
             if (isConnected) {
-                logEvent("INFO", "system", `WebRTC connected to vehicle ${vehicleId}`);
+                logEvent("INFO", "system", `WebRTC connected to vehicle ${selectedVehicleId}`);
                 latency.start();
             } else if (state === "failed" || state === "closed") {
-                logEvent("WARNING", "system", `WebRTC ${state} for vehicle ${vehicleId}`);
+                logEvent("WARNING", "system", `WebRTC ${state} for vehicle ${selectedVehicleId}`);
                 latency.stop();
             }
         }));
@@ -326,7 +329,12 @@ export const OCCBridgeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
         rtcCleanupsRef.current = unsubs;
         rtc.connect();
-    }, [teardownRtc, mapTelemetryToState, mapStatusToState, logEvent]);
+
+        return () => {
+            teardownRtc();
+        };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedVehicleId, vehicles]);
 
 
     // --- Actions ---
