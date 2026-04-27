@@ -28,6 +28,11 @@ export class WebRTCClient {
   private readonly vehicle: Vehicle;
   private readonly wt: WebTransportClient;
 
+  private outgoing: Record<string, Array<number>> = {
+    'motion': [0, 0]
+  }
+  private outgoingTimerId: any = 0
+
   // eslint-disable-next-line
   private listeners: Record<string, Set<Function>> = {};
 
@@ -105,11 +110,11 @@ export class WebRTCClient {
     this.emit("connectionState", "closed");
   }
 
-  private makeIncoming(incoming: Array<IoParam>, values: Record<string, number[]>): Uint8Array {
+  private makeOutgoing(outgoing: Array<IoParam>, values: Record<string, number[]>): Uint8Array {
     // 1) First pass: compute total size
     let totalLength = 0;
 
-    for (const param of incoming) {
+    for (const param of outgoing) {
       totalLength += param.types.length * 8;
       // worst-case assumption (Int64/UInt64 = 8 bytes)
     }
@@ -120,7 +125,7 @@ export class WebRTCClient {
     let offset = 0;
 
     // 2) Second pass: write directly
-    for (const param of incoming) {
+    for (const param of outgoing) {
       const paramValues = values[param.name];
 
       for (let i = 0; i < param.types.length; i++) {
@@ -158,11 +163,15 @@ export class WebRTCClient {
     return result.subarray(0, offset);
   }
 
-  sendTwist(linearX: number, angularZ: number): void {
+  setTwist(linearX: number, angularZ: number): void {
+    this.outgoing['motion'] = [linearX * 127, angularZ * 127]
+  }
+
+  sendOutgoing(): void {
     if (!this.datagramsChannel || this.datagramsChannel.readyState !== "open") {
       return;
     }
-    const bytes = this.makeIncoming(this.vehicle.IoConf.incoming, { 'motion': [linearX * 127, angularZ * 127] })
+    const bytes = this.makeOutgoing(this.vehicle.IoConf.incoming, this.outgoing)
     this.datagramsChannel.send(bytes as any)
   }
 
@@ -197,6 +206,9 @@ export class WebRTCClient {
       console.log(`[WebRTC] Connection state: ${state}`);
       this.emit("connectionState", state);
 
+      if (state == "connected") {
+        this.outgoingTimerId = setInterval(() => this.sendOutgoing(), 200)
+      }
       if (state === "failed" || state === "closed") {
         this.cleanup();
       }
@@ -247,6 +259,10 @@ export class WebRTCClient {
       this.pc.ondatachannel = null;
       this.pc.close();
       this.pc = null;
+    }
+
+    if (this.outgoingTimerId) {
+      clearInterval(this.outgoingTimerId)
     }
 
     this.listeners = {};

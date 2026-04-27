@@ -20,7 +20,7 @@ export class TwistSender {
     if (now - this.lastSentAt < MIN_INTERVAL_MS) return false;
 
     this.lastSentAt = now;
-    this.rtc.sendTwist(linearX, angularZ);
+    this.rtc.setTwist(linearX, angularZ);
     return true;
   }
 }

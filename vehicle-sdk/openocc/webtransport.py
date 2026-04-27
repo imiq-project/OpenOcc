@@ -137,15 +137,17 @@ class WebTransportClient:
     async def _process_stream(self):
         assert self._protocol
         buffer = bytearray()
+
         while True:
             data = await self._protocol.stream.get()
-            for value in data:
-                if value == 0:
-                    await self.messages.put(bytes(buffer))
-                    buffer = bytearray()
-                else:
-                    # TODO: is there a more efficient way?
-                    buffer.append(value)
+            parts = data.split(b'\x00')
+
+            buffer.extend(parts[0])
+
+            for part in parts[1:]:
+                await self.messages.put(bytes(buffer))
+                buffer.clear()
+                buffer.extend(part)
 
     def stop(self):
         self._stop_event.set()
@@ -156,7 +158,7 @@ class WebTransportClient:
 
     def send_message(self, message: str):
         assert self._protocol
-        # TODO: ensure that message does not contain \0 already
+        assert "\0" not in message
         data = message.encode()
         data += b"\0"  # delimiter
         self._protocol.send_stream(data)

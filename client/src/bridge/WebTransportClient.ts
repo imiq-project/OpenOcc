@@ -244,11 +244,12 @@ export class WebTransportClient {
           console.warn("Received unknown rpc response for id", msg.Payload.id)
         }
         break;
-      case "ice":
+      case "iceCandidate":
         this.emit("iceCandidate", data as unknown as IceCandidateMessage);
         break;
       case "iceServers":
         this.iceServers = (data as any).iceServers as RTCIceServer[]
+        console.log("[WT] Received a new set of iceServers", this.iceServers)
         break;
       default:
         console.warn("[WT] Unknown message type:", data.Type);

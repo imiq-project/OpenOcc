@@ -1,0 +1,7 @@
+[run]
+omit =
+    openocc/util.py
+    openocc/vehicle.py
+    openocc/operator.py
+    openocc/webtransport.py
+    openocc/client.py
