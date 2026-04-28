@@ -10,6 +10,7 @@ dependencies = [
   "aiortc",
   "requests",
 ]
+optional-dependencies = { dev = ["coverage"] }
 authors = [
   {name = "Björn Otto", email = "bjoern.otto@ovgu.de"},
 ]
