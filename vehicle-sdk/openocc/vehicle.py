@@ -48,6 +48,10 @@ class Vehicle(ABC):
     def emergency_halt(self, enable: bool) -> None:
         raise NotImplemented()
 
+    @command("move_to")
+    def move_to(self, lat, lon) -> None:
+        raise NotImplemented()
+
 
 class VehicleClient(ClientBase):
 
