@@ -1,7 +1,7 @@
 'use client';
 
-import React, {useRef, useState, useCallback, useEffect} from "react";
-import {useOCCBridge} from "@/context/OCCBridgeContext";
+import React, { useRef, useState, useCallback, useEffect } from "react";
+import { useOCCBridge } from "@/context/OCCBridgeContext";
 
 interface JoystickOutput {
     linear: number;  // -1 to 1 (forward/back)
@@ -28,9 +28,9 @@ const VirtualJoystick: React.FC<VirtualJoystickProps> = ({
     const disabled = disabledProp ?? !isDirectMode;
     const containerRef = useRef<HTMLDivElement>(null);
     const [dragging, setDragging] = useState(false);
-    const [offset, setOffset] = useState({x: 0, y: 0});
+    const [offset, setOffset] = useState({ x: 0, y: 0 });
     const publishInterval = useRef<NodeJS.Timeout | null>(null);
-    const currentOutput = useRef<JoystickOutput>({linear: 0, angular: 0});
+    const currentOutput = useRef<JoystickOutput>({ linear: 0, angular: 0 });
 
     const radius = size / 2;
     const handleRadius = size * 0.18;
@@ -46,19 +46,47 @@ const VirtualJoystick: React.FC<VirtualJoystickProps> = ({
         let dy = clientY - cy;
 
         const dist = Math.sqrt(dx * dx + dy * dy);
+        // Clamp the input to the joystick radius
         if (dist > maxDisplacement) {
             dx = (dx / dist) * maxDisplacement;
             dy = (dy / dist) * maxDisplacement;
         }
 
-        setOffset({x: dx, y: dy});
+        setOffset({ x: dx, y: dy });
 
         const normX = dx / maxDisplacement; // right positive
         const normY = -dy / maxDisplacement; // up positive
 
+        // Distance from origin is the linear velocity magnitude [0, maxDisplacement]
+        let linear = Math.sqrt(normX * normX + normY * normY);
+
+        // Angle from the forward (positive Y) axis
+        // Left is positive angle
+        const angle = Math.atan2(-normX, normY);
+        let angular = angle;
+
+        // Adapt linear velocity to be negative if mouse is in the bottom half of the circle
+        if (Math.abs(angle) > Math.PI / 2) {
+            linear = -linear;
+
+            // Map the angle so straight backwards (PI or -PI) gives 0 angular velocity
+            if (angle > 0) {
+                angular = Math.PI - angle;
+            } else {
+                angular = -Math.PI - angle;
+            }
+        }
+
+        // Normalize angular velocity to [-1, 1] where PI/2 (left) is 1.0
+        angular = angular / (Math.PI / 2);
+
+        // Clamp just to be safe with float math
+        linear = Math.max(-1, Math.min(1, linear));
+        angular = Math.max(-1, Math.min(1, angular));
+
         currentOutput.current = {
-            linear: normY,
-            angular: -normX,
+            linear: linear,
+            angular: angular,
         };
     }, [maxDisplacement]);
 
@@ -83,9 +111,9 @@ const VirtualJoystick: React.FC<VirtualJoystickProps> = ({
 
     const handlePointerUp = useCallback(() => {
         setDragging(false);
-        setOffset({x: 0, y: 0});
-        currentOutput.current = {linear: 0, angular: 0};
-        onMove?.({linear: 0, angular: 0});
+        setOffset({ x: 0, y: 0 });
+        currentOutput.current = { linear: 0, angular: 0 };
+        onMove?.({ linear: 0, angular: 0 });
         bridge.sendCmdVel(0, 0);
 
         if (publishInterval.current) {
@@ -107,14 +135,13 @@ const VirtualJoystick: React.FC<VirtualJoystickProps> = ({
         <div className="flex flex-col items-center gap-2">
             <div
                 ref={containerRef}
-                className={`relative rounded-full border-2 ${
-                    disabled
-                        ? "border-default-300 bg-default-100 cursor-not-allowed opacity-50"
-                        : dragging
-                            ? "border-primary bg-primary/10 cursor-grabbing"
-                            : "border-default-400 bg-default-100 cursor-grab"
-                }`}
-                style={{width: size, height: size}}
+                className={`relative rounded-full border-2 ${disabled
+                    ? "border-default-300 bg-default-100 cursor-not-allowed opacity-50"
+                    : dragging
+                        ? "border-primary bg-primary/10 cursor-grabbing"
+                        : "border-default-400 bg-default-100 cursor-grab"
+                    }`}
+                style={{ width: size, height: size }}
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
@@ -128,9 +155,8 @@ const VirtualJoystick: React.FC<VirtualJoystickProps> = ({
 
                 {/* Handle */}
                 <div
-                    className={`absolute rounded-full shadow-lg transition-colors ${
-                        dragging ? "bg-primary" : "bg-default-500"
-                    }`}
+                    className={`absolute rounded-full shadow-lg transition-colors ${dragging ? "bg-primary" : "bg-default-500"
+                        }`}
                     style={{
                         width: handleRadius * 2,
                         height: handleRadius * 2,
