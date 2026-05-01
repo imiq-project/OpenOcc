@@ -27,7 +27,7 @@ OpenOcc is a full-stack application for remote vehicle operation and control. It
 
 ## Architecture
 <div align="center">
-  <img src="doc/architecture.drawio.svg" alt="OpenOcc Architecture">
+  <img src="doc/figures/architecture.drawio.svg" alt="OpenOcc Architecture">
 </div>
 
 ### Component Overview

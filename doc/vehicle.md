@@ -14,7 +14,7 @@ On the other side, an operator can use OpenOcc's client to control any kind of v
 This means, that we map different input modes to abstract control commands of the Super-Vehicle
 
 <div align="center">
-    <img src="supervehicle.drawio.svg" alt="Super Vehicle" width="600">
+    <img src="figures/supervehicle.drawio.svg" alt="Super Vehicle" width="600">
 </div>
 
 ## Data model of the Super-Vehicle
@@ -51,4 +51,36 @@ Given these categories, we define the following properties for the Super-Vehicle
 | Command  | load_cargo | | Loads cargo at the current position onto the vehicle |
 | Command  | drop_cargo | | Drops the cargo loaded onto the vehicle |
 
-For further technical description, please refer to [Technical Details](technical.md).
+## Defining your own vehicle
+To define your own vehicle you first select the subset of features of the Super-Vehicle your vehicle actually supports.
+In the Python sdk, this is done by inheriting from the `Vehicle` base class.
+You then override the methods fitting your vehicle:
+
+```python
+from openocc.vehicle import Vehicle
+class MyVehicle(Vehicle):
+
+    VEHICLE_ID = "my_vehicle" # Register this within OpenOcc's client ui
+
+    def set_motion(self, speed, angle) -> None:
+        # Use speed and angle to move your vehicle accordingly
+```
+
+You then pass your vehicle to the `VehicleClient` class which handles all the communication with OpenOcc and connected operators:
+
+```python
+import asyncio
+
+async def main():
+    my_vehicle = MyVehicle()
+    client = VehicleClient("imiq-occ.et.uni-magdeburg.de", 443, False, my_vehicle)
+    await client.loop()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+Inside `VehicleCleint` we use reflection to figure out which methods your vehicle overrides and publish this to OpenOcc's server.
+This way, clients can adapt their ui depending on the features you chose to support.
+
+*For an in-depth technical description, please refer to [Technical Details](technical.md)*
