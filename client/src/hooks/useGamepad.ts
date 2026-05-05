@@ -11,6 +11,8 @@ class GamepadConfig {
     public pedalState: ConfigState = ConfigState.Unknown
     public wheelIdx: number = 0
     public wheelState: ConfigState = ConfigState.Unknown
+    public invertSpeedIdx: number = 0
+    public invertSpeedState: ConfigState = ConfigState.Unknown
     constructor(public index: number) { }
 }
 
@@ -34,7 +36,7 @@ class GamepadService {
             e.gamepad.buttons.length,
             e.gamepad.axes.length,
         );
-        console.log("[GP] To get it configured automatically, first move steering wheel to the left, than pedal ")
+        console.log("[GP] To get it configured automatically, first move steering wheel to the left, than pedal, than speed invert")
         this.config = new GamepadConfig(e.gamepad.index)
         this.loop()
     };
@@ -114,7 +116,56 @@ class GamepadService {
             default:
                 break;
         }
-        this.onchange(speed, angle)
+
+        // third, assign invert speed
+        let invertSpeed = false
+        switch (this.config.invertSpeedState) {
+            case ConfigState.Axis:
+                invertSpeed = gp.axes[this.config.pedalIdx] > 0
+                break;
+            case ConfigState.Button:
+                invertSpeed = gp.buttons[this.config.pedalIdx].pressed
+                break;
+            case ConfigState.Unknown:
+                if (this.config.pedalState != ConfigState.Unknown) {
+                    for (let idx = 0; idx < gp.axes.length; ++idx) {
+                        if (gp.axes[idx] != 0) {
+                            if (this.config.wheelState == ConfigState.Axis && this.config.wheelIdx == idx) {
+                                // already mapped to wheel
+                            } else if(this.config.pedalState == ConfigState.Axis && this.config.pedalIdx == idx) {
+                                // already mapped to pedal
+                            } else {
+                                this.config.invertSpeedState = ConfigState.Axis
+                                this.config.invertSpeedIdx = idx;
+                                console.log("[GP] Selected %d/%d as speed invert", this.config.invertSpeedIdx, this.config.invertSpeedState)
+                                break;
+                            }
+                        }
+                    }
+                    if (this.config.invertSpeedIdx == ConfigState.Unknown) {
+                        for (let idx = 0; idx < gp.buttons.length; ++idx) {
+                            if (gp.buttons[idx].value != 0) {
+                                if (this.config.wheelState == ConfigState.Button && this.config.wheelIdx == idx) {
+                                    // already mapped to wheel
+                                } else if (this.config.pedalState == ConfigState.Button && this.config.pedalIdx == idx) {
+                                    // already mapped to pedal
+                                } else {
+                                    this.config.invertSpeedState = ConfigState.Button
+                                    this.config.invertSpeedIdx = idx;
+                                    console.log("[GP] Selected %d/%d as speed invert", this.config.invertSpeedIdx, this.config.invertSpeedState)
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                break;
+            default:
+                break;
+        }
+
+        // invert angle as left is negative and right is positive, but for us left should be positive and right negative
+        this.onchange(invertSpeed ? -speed : speed, -angle)
     }
 }
 
