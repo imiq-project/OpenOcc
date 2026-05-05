@@ -24,19 +24,19 @@ import FloatingControls from "./FloatingControls";
 Object3D.DEFAULT_UP = new Vector3(0, 0, 1);
 
 const TeleoperationScene: React.FC = () => {
-    const [map] = useOpenStreetMap();
+    // const [map] = useOpenStreetMap();
     const bridge = useOCCBridge();
     const [cameraTracking, setCameraTracking] = useState(true);
     const [controlsOpen, setControlsOpen] = useState(false);
     const vehicleConfig = VehicleConfigurations[VehicleModel.Husky];
 
-    if (!map) {
-        return (
-            <div className="h-full flex items-center justify-center bg-occ-deep">
-                <Spinner size="lg" label="Loading map..." />
-            </div>
-        );
-    }
+    // if (!map) {
+    //     return (
+    //         <div className="h-full flex items-center justify-center bg-occ-deep">
+    //             <Spinner size="lg" label="Loading map..." />
+    //         </div>
+    //     );
+    // }
 
     return (
         <div className="h-full w-full relative bg-occ-deep">

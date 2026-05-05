@@ -121,10 +121,10 @@ class GamepadService {
         let invertSpeed = false
         switch (this.config.invertSpeedState) {
             case ConfigState.Axis:
-                invertSpeed = gp.axes[this.config.pedalIdx] > 0
+                invertSpeed = gp.axes[this.config.pedalIdx] > 0.3
                 break;
             case ConfigState.Button:
-                invertSpeed = gp.buttons[this.config.pedalIdx].pressed
+                invertSpeed = gp.buttons[this.config.pedalIdx].value > 0.3
                 break;
             case ConfigState.Unknown:
                 if (this.config.pedalState != ConfigState.Unknown) {
