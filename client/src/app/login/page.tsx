@@ -81,6 +81,11 @@ export default function LoginPage() {
         setTimeout(() => router.push("/dashboard"), 2000);
     };
 
+    const handleSkip = () => {
+        router.push("/dashboard");
+    };
+
+
     // ── Splash Screen ──────────────────────────────────────
     if (phase === "splash") {
         return (
@@ -248,6 +253,14 @@ export default function LoginPage() {
                                 isDisabled={!selectedVehicle}
                             >
                                 Connect
+                            </Button>
+                            <Button
+                                variant="light"
+                                size="sm"
+                                onPress={handleSkip}
+                                className="w-full"
+                            >
+                                Skip — connect later
                             </Button>
                         </>
                     )}
