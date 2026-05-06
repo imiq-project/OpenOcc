@@ -33,7 +33,7 @@ class Car(Entity):
         # Clamp speed
         self.speed = clamp(self.speed, -self.max_speed / 2, self.max_speed)
 
-        self.rotation_y += self.turn_speed * time.dt * (self.speed / self.max_speed)
+        self.rotation_y -= self.turn_speed * time.dt * (self.speed / self.max_speed)
 
         move_vector = self.forward * self.speed * time.dt
         self.position += move_vector
@@ -146,10 +146,8 @@ class Game:
     def run(self):
         self.app.run()
 
-    def set_car_speed(self, speed):
+    def set_motion(self, speed, angle):
         self.car.speed = speed
-
-    def set_car_angle(self, angle):
         self.car.turn_speed = angle
 
 if __name__ == "__main__":

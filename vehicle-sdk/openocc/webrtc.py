@@ -11,6 +11,7 @@ from aiortc import (
     RTCIceServer,
     RTCDataChannel,
     MediaStreamTrack,
+    MediaStreamError,
 )
 from aiortc.sdp import candidate_from_sdp
 
@@ -90,15 +91,19 @@ class WebRtcClient:
 
     async def check_timeout(self):
         while self._rtc_connection.connectionState != "closed":
-            await asyncio.sleep(1)
             if self._last_message + self.timeout < time.monotonic():
                 logging.error(f"No messages since {self.timeout}s, closing session")
                 await self._rtc_connection.close()
+            await asyncio.sleep(1)
 
     async def forward_incoming_track(self, callback: Callable[[Frame], None], track: MediaStreamTrack):
         logging.info(f"Forwarding track {track.id} to {callback}")
         while True:
-            frame = await track.recv()
+            try:
+                frame = await track.recv()
+            except MediaStreamError as e:
+                logging.info(f"Stop forwarding of tracks")
+                break
             assert isinstance(frame, Frame)
             callback(frame)
 

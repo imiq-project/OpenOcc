@@ -6,7 +6,7 @@ from typing import List, Any, Tuple, Dict, Optional
 import logging
 import random
 import asyncio
-from av.frame import Frame
+from av.video import VideoFrame
 
 
 class RemoteVehicle(ABC):
@@ -22,19 +22,19 @@ class RemoteVehicle(ABC):
         return 0, 0
 
     @incoming("front_camera", [DataType.Video])
-    def set_front_camera(self, frame: Frame) -> None:
+    def set_front_camera(self, frame: VideoFrame) -> None:
         pass
 
     @incoming("back_camera", [DataType.Video])
-    def set_back_camera(self, frame: Frame) -> None:
+    def set_back_camera(self, frame: VideoFrame) -> None:
         pass
 
     @incoming("left_camera", [DataType.Video])
-    def set_left_camera(self, frame: Frame) -> None:
+    def set_left_camera(self, frame: VideoFrame) -> None:
         pass
 
     @incoming("right_camera", [DataType.Video])
-    def set_right_camera(self, frame: Frame) -> None:
+    def set_right_camera(self, frame: VideoFrame) -> None:
         pass
 
     @incoming("position", [DataType.UInt64, DataType.UInt64])

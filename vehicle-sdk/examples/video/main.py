@@ -36,6 +36,9 @@ async def main():
         def get_back_camera(self):
             self.back_phase -= 0.1
             return animate_rainbow(self.back_phase)
+        
+        def get_battery_level(self):
+            return 42,
 
         def emergency_halt(self, enable: bool):
             logging.info("Emergency halt triggered!")

@@ -40,7 +40,7 @@ class Vehicle(ABC):
         raise NotImplemented()
 
     @outgoing("battery_level", [DataType.UInt8])
-    def get_battery_level(self) -> int:
+    def get_battery_level(self) -> Tuple[int]:
         raise NotImplemented()
 
     @command("emergency_halt")

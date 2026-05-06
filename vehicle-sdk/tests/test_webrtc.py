@@ -1,14 +1,18 @@
 import unittest
+
+from av.frame import Frame
 from openocc.webrtc import WebRtcClient
 import asyncio
 import time
 from aiortc import VideoStreamTrack
+from av.video import VideoFrame
+
 
 class TestWebRtc(unittest.IsolatedAsyncioTestCase):
 
     async def test_communicate(self):
-        sender = WebRtcClient([], [], 0)
-        receiver = WebRtcClient([], [], 0)
+        sender = WebRtcClient([], [], [])
+        receiver = WebRtcClient([], [], [])
 
         offer = await sender.generate_offer()
         answer = await receiver.process_offer(offer)
@@ -54,8 +58,8 @@ class TestWebRtc(unittest.IsolatedAsyncioTestCase):
         sender_timeout = 2
         receiver_timeout = 3
 
-        sender = WebRtcClient([], [], 0, sender_timeout)
-        receiver = WebRtcClient([], [], 0, receiver_timeout)
+        sender = WebRtcClient([], [], [], sender_timeout)
+        receiver = WebRtcClient([], [], [], receiver_timeout)
 
         offer = await sender.generate_offer()
         answer = await receiver.process_offer(offer)
@@ -73,8 +77,12 @@ class TestWebRtc(unittest.IsolatedAsyncioTestCase):
         self.assertAlmostEqual(time.monotonic() - now, sender_timeout, places=1)
 
     async def test_media_tracks(self):
-        sender = WebRtcClient([], [], 1)
-        receiver = WebRtcClient([], [VideoStreamTrack()], 0)
+        class DummyStream(VideoStreamTrack):
+            async def recv(self) -> Frame:
+                return VideoFrame(width=640, height=480)
+
+        sender = WebRtcClient([], [DummyStream()], [])
+        receiver = WebRtcClient([], [], [lambda _: None])
 
         offer = await sender.generate_offer()
         answer = await receiver.process_offer(offer)
@@ -84,5 +92,5 @@ class TestWebRtc(unittest.IsolatedAsyncioTestCase):
         await sender.connected.wait()
         await receiver.connected.wait()
 
-        await asyncio.sleep(3)
+        await asyncio.sleep(1)
         await asyncio.gather(sender.close(), receiver.close())

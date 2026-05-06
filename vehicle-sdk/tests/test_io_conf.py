@@ -16,7 +16,7 @@ class IoConfFromClass(unittest.TestCase):
         class MyVehicle:
             pass
 
-        binding = binding_for(MyVehicle(), MyVehicle)
+        binding = binding_for(MyVehicle(), MyVehicle, True)
         expected_conf = {"incoming": [], "outgoing": [], "commands": []}
         self.assertEqual(expected_conf, binding.io_conf.to_json())
 
@@ -59,7 +59,7 @@ class IoConfFromClass(unittest.TestCase):
             def trigger_alarm(self):
                 pass
 
-        binding = binding_for(MyVehicle(), MyVehicle)
+        binding = binding_for(MyVehicle(), MyVehicle, True)
         expected_conf = {
             "incoming": [
                 {"name": "angle", "types": ["uint64"]},
@@ -87,7 +87,7 @@ class IoConfFromClass(unittest.TestCase):
                 pass
 
         with self.assertRaises(IoConfException):
-            binding_for(MyVehicle(), MyVehicle)
+            binding_for(MyVehicle(), MyVehicle, True)
 
     def test_duplicate_input(self):
         class MyVehicle:
@@ -100,7 +100,7 @@ class IoConfFromClass(unittest.TestCase):
                 pass
 
         with self.assertRaises(IoConfException):
-            binding_for(MyVehicle(), MyVehicle)
+            binding_for(MyVehicle(), MyVehicle, True)
 
     def test_duplicate_command(self):
         class MyVehicle:
@@ -113,7 +113,7 @@ class IoConfFromClass(unittest.TestCase):
                 pass
 
         with self.assertRaises(IoConfException):
-            binding_for(MyVehicle(), MyVehicle)
+            binding_for(MyVehicle(), MyVehicle, True)
 
     def test_inheritance(self):
         class BaseVehicle:
@@ -151,7 +151,7 @@ class IoConfFromClass(unittest.TestCase):
             def emergency_halt(self):
                 pass
 
-        binding = binding_for(MyVehicle(), BaseVehicle)
+        binding = binding_for(MyVehicle(), BaseVehicle, True)
         expected_conf = {
             "incoming": [
                 {"name": "speed", "types": ["uint64"]},
@@ -171,7 +171,7 @@ class IoConfFromClass(unittest.TestCase):
             class MyClass:
                 pass
 
-            binding_for(MyClass(), str)
+            binding_for(MyClass(), str, True)
 
     def test_media(self):
         class MyVehicle:
@@ -187,13 +187,12 @@ class IoConfFromClass(unittest.TestCase):
             def set_announcement(self, audio):
                 pass
 
-        binding = binding_for(MyVehicle(), MyVehicle)
+        binding = binding_for(MyVehicle(), MyVehicle, True)
         self.assertEqual(len(binding.get_incoming_track_callbacks()), 1)
         self.assertEqual(len(binding.get_outgoing_tracks()), 2)
-        callbacks = binding.get_outgoing_tracks()
-        self.assertEqual(len(callbacks), 2)
-        for cb in callbacks:
-            cb()
+        tracks = binding.get_outgoing_tracks()
+        self.assertEqual(len(tracks), 2)
+            
 
 
 class FromJson(unittest.TestCase):
@@ -239,7 +238,7 @@ class ApplyBinding(unittest.TestCase):
                 return a + b
 
         instance = MyVehicle()
-        conf = binding_for(instance, MyVehicle)
+        conf = binding_for(instance, MyVehicle, True)
 
         payload = conf.io_conf.encode_incoming({"angle": [10], "speed": [123]})
         conf.decode_incoming(payload)
@@ -278,9 +277,9 @@ class TransmitBinding(unittest.TestCase):
                 self.cam = cam
 
         sender = MyVehicle()
-        binding_sender = binding_for(sender, MyVehicle)
+        binding_sender = binding_for(sender, MyVehicle, True)
         receiver = MyOperator()
-        binding_receiver = binding_for(receiver, MyOperator)
+        binding_receiver = binding_for(receiver, MyOperator, True)
         binding_receiver.narrow_down(binding_sender.io_conf)
 
         payload = binding_sender.encode_outgoing()
@@ -297,9 +296,9 @@ class TransmitBinding(unittest.TestCase):
             pass
 
         sender = MyVehicle()
-        binding_sender = binding_for(sender, MyVehicle)
+        binding_sender = binding_for(sender, MyVehicle, True)
         receiver = MyOperator()
-        binding_receiver = binding_for(receiver, MyOperator)
+        binding_receiver = binding_for(receiver, MyOperator, True)
         with self.assertRaises(IoConfException):
             binding_receiver.narrow_down(binding_sender.io_conf)
 
@@ -313,9 +312,9 @@ class TransmitBinding(unittest.TestCase):
             pass
 
         sender = MyVehicle()
-        binding_sender = binding_for(sender, MyVehicle)
+        binding_sender = binding_for(sender, MyVehicle, True)
         receiver = MyOperator()
-        binding_receiver = binding_for(receiver, MyOperator)
+        binding_receiver = binding_for(receiver, MyOperator, True)
         with self.assertRaises(IoConfException):
             binding_receiver.narrow_down(binding_sender.io_conf)
 
@@ -350,9 +349,9 @@ class TransmitBinding(unittest.TestCase):
                 self.battery = battery  # not called
 
         sender = MyVehicle()
-        binding_sender = binding_for(sender, MyVehicle)
+        binding_sender = binding_for(sender, MyVehicle, True)
         receiver = MyOperator()
-        binding_receiver = binding_for(receiver, MyOperator)
+        binding_receiver = binding_for(receiver, MyOperator, True)
         binding_receiver.narrow_down(binding_sender.io_conf)
 
         payload = binding_sender.encode_outgoing()
