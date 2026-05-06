@@ -188,9 +188,9 @@ class IoConfFromClass(unittest.TestCase):
                 pass
 
         binding = binding_for(MyVehicle(), MyVehicle)
-        self.assertEqual(binding.io_conf.count_incoming_tracks(), 1)
-        self.assertEqual(binding.io_conf.count_outgoing_tracks(), 2)
-        callbacks = binding.get_outgoing_track_callbacks()
+        self.assertEqual(len(binding.get_incoming_track_callbacks()), 1)
+        self.assertEqual(len(binding.get_outgoing_tracks()), 2)
+        callbacks = binding.get_outgoing_tracks()
         self.assertEqual(len(callbacks), 2)
         for cb in callbacks:
             cb()

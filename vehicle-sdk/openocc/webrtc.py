@@ -1,6 +1,7 @@
 import logging
 import asyncio
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Callable
+from av.frame import Frame
 import time
 
 from aiortc import (
@@ -14,13 +15,20 @@ from aiortc import (
 from aiortc.sdp import candidate_from_sdp
 
 
+class ConnectionState:
+    Initialized = "initialized"
+    Connecting = "connecting"
+    Connected = "connected"
+    Closed = "closed"
+
+
 class WebRtcClient:
 
     def __init__(
         self,
         ice_servers: List[RTCIceServer],
         outgoing_tracks: List[MediaStreamTrack],
-        num_incoming_tracks: int,
+        incoming_track_callbacks: List[Callable[[Frame], None]],
         timeout_secs: int = 3,
     ) -> None:
         logging.info("Creating new WebRTC connection...")
@@ -36,6 +44,7 @@ class WebRtcClient:
         self.messages = asyncio.Queue()
         self.connected = asyncio.Event()
         self.closed = asyncio.Event()
+        self.connection_state = ConnectionState.Initialized
 
         @self._rtc_connection.on("connectionstatechange")
         def connection_state_changed():
@@ -43,9 +52,16 @@ class WebRtcClient:
             logging.info(
                 f"WebRTC connection state changed: {self._rtc_connection.connectionState}"
             )
-            if self._rtc_connection.connectionState == "connected":
+
+            if self._rtc_connection.connectionState == "new":
+                pass
+            elif self._rtc_connection.connectionState == "connecting":
+                self.connection_state = ConnectionState.Connecting
+            elif self._rtc_connection.connectionState == "connected":
                 asyncio.create_task(self.check_timeout())
-            if self._rtc_connection.connectionState == "closed":
+                # We set State.Connected after detection of two datachannels
+            if self._rtc_connection.connectionState in ["failed", "closed"]:
+                self.connection_state = ConnectionState.Closed
                 self.closed.set()
 
         @self._rtc_connection.on("icecandidate")
@@ -55,12 +71,21 @@ class WebRtcClient:
                 return
             raise Exception("Trickle ICE not expected!")
 
+        num_received_tracks = 0
+        @self._rtc_connection.on("track")
+        def on_track(track: MediaStreamTrack):
+            nonlocal num_received_tracks
+            logging.info(f"Received new track {track.id} {track.kind}")
+            asyncio.create_task(self.forward_incoming_track(incoming_track_callbacks[num_received_tracks], track))
+            num_received_tracks += 1
+
         logging.info(
-            f"Tracks: {len(outgoing_tracks)} outgoing, {num_incoming_tracks} incoming"
+            f"Tracks: {len(outgoing_tracks)} outgoing, {len(incoming_track_callbacks)} incoming"
         )
+
         for track in outgoing_tracks:
             self._rtc_connection.addTrack(track)
-        for _ in range(num_incoming_tracks):
+        for _ in incoming_track_callbacks:
             self._rtc_connection.addTransceiver("video", "recvonly")
 
     async def check_timeout(self):
@@ -69,6 +94,13 @@ class WebRtcClient:
             if self._last_message + self.timeout < time.monotonic():
                 logging.error(f"No messages since {self.timeout}s, closing session")
                 await self._rtc_connection.close()
+
+    async def forward_incoming_track(self, callback: Callable[[Frame], None], track: MediaStreamTrack):
+        logging.info(f"Forwarding track {track.id} to {callback}")
+        while True:
+            frame = await track.recv()
+            assert isinstance(frame, Frame)
+            callback(frame)
 
     async def add_ice_candidate(self, sdp: str, sdp_mid, sdp_mline_index):
         logging.info("New ice candidate")
@@ -99,10 +131,12 @@ class WebRtcClient:
         @self._datagram_channel.on("open")
         @self._messages_channel.on("open")
         def set_connected():
+            assert self._datagram_channel and self._messages_channel
             if (
                 self._datagram_channel.readyState == "open"
                 and self._messages_channel.readyState == "open"
             ):
+                self.connection_state = ConnectionState.Connected
                 self.connected.set()
 
         offer = await self._rtc_connection.createOffer()
@@ -127,6 +161,7 @@ class WebRtcClient:
                 logging.error("Invalid channel id")
 
             if self._messages_channel and self._datagram_channel:
+                self.connection_state = ConnectionState.Connected
                 self.connected.set()
 
         await self._rtc_connection.setRemoteDescription(

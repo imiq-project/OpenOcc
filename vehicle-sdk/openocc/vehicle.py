@@ -3,10 +3,9 @@ from openocc.ioconf import outgoing, incoming, command, DataType
 from av.frame import Frame
 from abc import ABC, abstractmethod
 from .ioconf import IoConf, binding_for
-from .webrtc import WebRtcClient
-from .client import ClientBase, CallbackVideoStream
+from .webrtc import WebRtcClient, ConnectionState
+from .client import ClientBase
 from typing import List, Any, Tuple, Dict, Optional
-from aiortc import MediaStreamTrack
 import logging
 import json
 import asyncio
@@ -57,7 +56,7 @@ class VehicleClient(ClientBase):
 
     def __init__(self, host: str, port: int, insecure: bool, vehicle: Vehicle) -> None:
         self._vehicle = vehicle
-        self._binding = binding_for(vehicle, Vehicle)
+        self._binding = binding_for(vehicle, Vehicle, True)
         path = f"/wt-vehicle?VehicleId={vehicle.VEHICLE_ID}&IoConf={json.dumps(self._binding.io_conf.to_json())}"
         super().__init__(vehicle.VEHICLE_ID, host, port, insecure, path)
         self._rtc_connection: Optional[WebRtcClient] = None
@@ -83,16 +82,16 @@ class VehicleClient(ClientBase):
 
     async def _process_webrtc_offer(self, offer: str):
         if self._rtc_connection is not None:
-            logging.error("Cannot process offer: WebRTC connection already established")
-            return
+            if self._rtc_connection.connection_state == ConnectionState.Connected:
+                logging.error("Cannot process offer: WebRTC connection already established")
+                return
+            else:
+                await self._rtc_connection.close()
 
         self._rtc_connection = WebRtcClient(
             self._ice_servers,
-            [
-                CallbackVideoStream(i)
-                for i in self._binding.get_outgoing_track_callbacks()
-            ],
-            self._binding.io_conf.count_incoming_tracks(),
+            self._binding.get_outgoing_tracks(),
+            self._binding.get_incoming_track_callbacks(),
         )
 
         async def handle_close():

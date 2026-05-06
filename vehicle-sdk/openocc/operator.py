@@ -3,7 +3,6 @@ from .ioconf import IoConf, binding_for, outgoing, incoming, DataType
 from .webrtc import WebRtcClient
 from .client import ClientBase, RpcException
 from typing import List, Any, Tuple, Dict, Optional
-from aiortc import MediaStreamTrack
 import logging
 import random
 import asyncio
@@ -14,9 +13,8 @@ class RemoteVehicle(ABC):
     def __init__(self, client: "OperatorClient", id: str, io_conf: IoConf) -> None:
         self.client = client
         self.id = id
-        self.io_conf = io_conf
         self._rtc_connection: Optional[WebRtcClient] = None
-        self._binding = binding_for(self, RemoteVehicle)
+        self._binding = binding_for(self, RemoteVehicle, False)
         self._binding.narrow_down(io_conf)
 
     @outgoing("motion", [DataType.Int8, DataType.Int8])
@@ -57,8 +55,8 @@ class RemoteVehicle(ABC):
 
         self._rtc_connection = WebRtcClient(
             self.client._ice_servers,
-            [],
-            self.io_conf.count_outgoing_tracks(),
+            self._binding.get_outgoing_tracks(),
+            self._binding.get_incoming_track_callbacks(),
         )
         offer = await self._rtc_connection.generate_offer()
         answer = await self.client.send_rpc_request(self.id, "_webRtcOffer", [offer])
@@ -77,7 +75,7 @@ class RemoteVehicle(ABC):
             while self._rtc_connection:
                 payload = self._binding.encode_outgoing()
                 self._rtc_connection.send_datagram(payload)
-                await asyncio.sleep(1)
+                await asyncio.sleep(.02)
 
         asyncio.create_task(send_rtc_ping())
 
@@ -107,7 +105,6 @@ class OperatorClient(ClientBase):
     ) -> None:
         self._operator = operator
         self._operator_id = random.randint(0, 10**4)
-        self._binding = binding_for(operator, Operator)
         path = f"/wt-operator?OperatorId={self._operator_id}"
         super().__init__(str(self._operator_id), host, port, insecure, path)
         self.message_handlers["status"] = self._process_status_message

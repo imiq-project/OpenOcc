@@ -36,19 +36,6 @@ class RpcException(Exception):
         self.code = code
 
 
-class CallbackVideoStream(VideoStreamTrack):
-    def __init__(self, callback: Callable[[], Frame]) -> None:
-        super().__init__()
-        self._callback = callback
-
-    async def recv(self):
-        pts, time_base = await self.next_timestamp()
-        frame = self._callback()
-        frame.pts = pts
-        frame.time_base = time_base
-        return frame
-
-
 class ClientBase(ABC):
 
     def __init__(

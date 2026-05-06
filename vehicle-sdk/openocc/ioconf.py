@@ -1,7 +1,9 @@
 from dataclasses import dataclass
-from typing import List, Dict, Any, Callable, Type
+from typing import List, Dict, Any, Callable, Type, Any
 from enum import Enum
 import struct
+from av.frame import Frame
+from aiortc import VideoStreamTrack, MediaStreamTrack
 
 _INPUT_PARAM = "_input_param"
 _OUTPUT_PARAM = "_output_param"
@@ -9,6 +11,17 @@ _COMMAND = "_command"
 
 from typing import Callable
 
+class CallbackVideoStream(VideoStreamTrack):
+    def __init__(self, callback: Callable[[], Frame]) -> None:
+        super().__init__()
+        self._callback = callback
+
+    async def recv(self):
+        pts, time_base = await self.next_timestamp()
+        frame = self._callback()
+        frame.pts = pts
+        frame.time_base = time_base
+        return frame
 
 class DataType(Enum):
     Int8 = "int8"
@@ -158,20 +171,6 @@ class IoConf:
             idx += len(param.data_types)
         return result
 
-    def count_outgoing_tracks(self):
-        result = 0
-        for i in self._outgoing:
-            if i.is_media():
-                result += 1
-        return result
-
-    def count_incoming_tracks(self):
-        result = 0
-        for i in self._incoming:
-            if i.is_media():
-                result += 1
-        return result
-
     def _invalidate(self):
         for idx, entry in enumerate(self._incoming[:-1]):
             if entry.name >= self._incoming[idx + 1].name:
@@ -218,13 +217,22 @@ class Binding:
             raise IoConfException(f"Command {method} does not exist")
         return func(*params)
 
-    def get_outgoing_track_callbacks(self):
+    def get_outgoing_tracks(self) -> List[MediaStreamTrack]:
         result = []
         for func, param in zip(self._func_outgoing, self.io_conf._outgoing):
             for dt in param.data_types:
                 if dt == DataType.Video or dt == DataType.Audio:
+                    result.append(CallbackVideoStream(func))
+        return result
+
+    def get_incoming_track_callbacks(self) -> List[Callable[[Frame],Any]]:
+        result = []
+        for func, param in zip(self._func_incoming, self.io_conf._incoming):
+            for dt in param.data_types:
+                if dt == DataType.Video or dt == DataType.Audio:
                     result.append(func)
         return result
+
 
     def narrow_down(self, sender_conf: IoConf):
         new_outgoing = []
@@ -267,7 +275,7 @@ def _overrides(obj, method_name, base_class):
     return sub_method is not base_method
 
 
-def binding_for(instance: object, base_kls: Type) -> Binding:
+def binding_for(instance: object, base_kls: Type, overridden_only: bool) -> Binding:
     result = Binding()
     if not isinstance(instance, base_kls):
         raise IoConfException("instance must inherit from base_kls")
@@ -276,21 +284,21 @@ def binding_for(instance: object, base_kls: Type) -> Binding:
         base_method = getattr(base_kls, name)
 
         input_param = getattr(base_method, _INPUT_PARAM, None)
-        if input_param and _overrides(instance, name, base_kls):
+        if input_param and (_overrides(instance, name, base_kls) or not overridden_only):
             assert isinstance(input_param, Param)
             child_method = getattr(instance, name)
             result.io_conf._incoming.append(input_param)
             result._func_incoming.append(child_method)
 
         output_param = getattr(base_method, _OUTPUT_PARAM, None)
-        if output_param and _overrides(instance, name, base_kls):
+        if output_param and (_overrides(instance, name, base_kls) or not overridden_only):
             assert isinstance(output_param, Param)
             child_method = getattr(instance, name)
             result.io_conf._outgoing.append(output_param)
             result._func_outgoing.append(child_method)
 
         command = getattr(base_method, _COMMAND, None)
-        if command and _overrides(instance, name, base_kls):
+        if command and (_overrides(instance, name, base_kls) or not overridden_only):
             assert isinstance(command, Command)
             command_method = getattr(instance, name)
             result.io_conf._commands.append(command)
