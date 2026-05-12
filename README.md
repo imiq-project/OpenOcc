@@ -1,18 +1,18 @@
 <div align="center">
-  <img src="client/public/logo.png" alt="OpenOcc Logo" width="300">
+  <img src="client/public/logo.png" alt="SteeringWheel Logo" width="300">
 </div>
 
-[![SDK](https://github.com/imiq-project/OpenOcc/actions/workflows/check-sdk.yml/badge.svg)](https://github.com/imiq-project/OpenOcc/actions/workflows/check-sdk.yml)
-[![Server](https://github.com/imiq-project/OpenOcc/actions/workflows/build-server.yml/badge.svg)](https://github.com/imiq-project/OpenOcc/actions/workflows/build-server.yml)
-[![Client](https://github.com/imiq-project/OpenOcc/actions/workflows/build-client.yml/badge.svg)](https://github.com/imiq-project/OpenOcc/actions/workflows/build-client.yml)
+[![SDK](https://github.com/imiq-project/SteeringWheel/actions/workflows/check-sdk.yml/badge.svg)](https://github.com/imiq-project/SteeringWheel/actions/workflows/check-sdk.yml)
+[![Server](https://github.com/imiq-project/SteeringWheel/actions/workflows/build-server.yml/badge.svg)](https://github.com/imiq-project/SteeringWheel/actions/workflows/build-server.yml)
+[![Client](https://github.com/imiq-project/SteeringWheel/actions/workflows/build-client.yml/badge.svg)](https://github.com/imiq-project/SteeringWheel/actions/workflows/build-client.yml)
 
-# OpenOcc
+# SteeringWheel
 
 A comprehensive teleoperation and vehicle control platform with real-time communication, mission planning, and remote operation capabilities.
 
 ## Overview
 
-OpenOcc is a full-stack application for remote vehicle operation and control. It provides operators with a web-based interface to control vehicles, monitor telemetry, plan missions, and manage vehicle settings through secure WebRTC and WebTransport connections.
+SteeringWheel is a full-stack application for remote vehicle operation and control. It provides operators with a web-based interface to control vehicles, monitor telemetry, plan missions, and manage vehicle settings through secure WebRTC and WebTransport connections.
 
 ### Key Features
 
@@ -27,16 +27,16 @@ OpenOcc is a full-stack application for remote vehicle operation and control. It
 
 ## Architecture
 <div align="center">
-  <img src="doc/figures/architecture.drawio.svg" alt="OpenOcc Architecture">
+  <img src="doc/figures/architecture.drawio.svg" alt="SteeringWheel Architecture">
 </div>
 
 ### Component Overview
 
-**Vehicle** — Any entity that can move, whether it's a car, robot, AGV, or drone. OpenOcc provides client libraries in Python for simple integration, allowing vehicles to connect and communicate with the platform seamlessly.
+**Vehicle** — Any entity that can move, whether it's a car, robot, AGV, or drone. SteeringWheel provides client libraries in Python for simple integration, allowing vehicles to connect and communicate with the platform seamlessly.
 
 **Operator** — A human who monitors and controls vehicles in real-time. Operators can intervene when needed and use teleoperation to navigate vehicles remotely, making decisions based on live telemetry and video feeds.
 
-**Client** — The user interface designed for operators. The client displays vehicles on a map and provides controls for teleoperation. Multiple clients can be open simultaneously for the same operator, and while OpenOcc includes its own web-based client, the platform is flexible enough to integrate with any compatible interface.
+**Client** — The user interface designed for operators. The client displays vehicles on a map and provides controls for teleoperation. Multiple clients can be open simultaneously for the same operator, and while SteeringWheel includes its own web-based client, the platform is flexible enough to integrate with any compatible interface.
 
 **Server** — Built in Go for stability and performance, the server acts as a central broker. It connects both vehicles and clients via WebTransport, forwarding messages between them in real-time while maintaining efficient, low-latency communication.
 
@@ -44,10 +44,10 @@ OpenOcc is a full-stack application for remote vehicle operation and control. It
 
 ### Install Python SDK
 
-Requires Python >= 3.9 and pip >= 24:
+Requires Python >= 3.9:
 
 ```bash
-pip install git+https://github.com/imiq-project/OpenOcc.git@main#subdirectory=vehicle-sdk
+pip install git+https://github.com/imiq-project/SteeringWheel.git@main
 ```
 
 ### Basic Usage
@@ -57,8 +57,8 @@ import logging
 import argparse
 import asyncio
 
-from openocc.vehicle import Vehicle, VehicleClient
-from openocc.util import animate_rainbow
+from steering_wheel.vehicle import Vehicle, VehicleClient
+from steering_wheel.util import animate_rainbow
 
 
 async def main():
@@ -117,8 +117,8 @@ To get a STUN/TURN server, create a free account at https://www.expressturn.com.
 Increase udp buffer size (needed for WebTransport)
 
 ```sh
-echo -e "net.core.rmem_max = 7500000\nnet.core.wmem_max = 7500000" | sudo tee /etc/sysctl.d/99-openocc.conf
-sudo sysctl -p /etc/sysctl.d/99-openocc.conf
+echo -e "net.core.rmem_max = 7500000\nnet.core.wmem_max = 7500000" | sudo tee /etc/sysctl.d/99-steering_wheel.conf
+sudo sysctl -p /etc/sysctl.d/99-steering_wheel.conf
 ```
 
 ### Server startup
@@ -137,7 +137,7 @@ services:
       - pgdata:/var/lib/postgresql/data
 
   server:
-    image: ghcr.io/imiq-project/openocc-server:latest
+    image: ghcr.io/imiq-project/steering_wheel-server:latest
     command: ./app --use-acme --hostname your-domain.com
     volumes:
       - certs:/certs
@@ -151,7 +151,7 @@ services:
       - 443:443/udp # http/3
 
   client:
-    image: ghcr.io/imiq-project/openocc-client:latest
+    image: ghcr.io/imiq-project/steering_wheel-client:latest
 
 volumes:
   pgdata:
@@ -243,8 +243,8 @@ sudo sysctl -w net.core.wmem_max=7500000
 
 To make permanent:
 ```bash
-echo -e "net.core.rmem_max = 7500000\nnet.core.wmem_max = 7500000" | sudo tee /etc/sysctl.d/99-openocc.conf
-sudo sysctl -p /etc/sysctl.d/99-openocc.conf
+echo -e "net.core.rmem_max = 7500000\nnet.core.wmem_max = 7500000" | sudo tee /etc/sysctl.d/99-steering_wheel.conf
+sudo sysctl -p /etc/sysctl.d/99-steering_wheel.conf
 ```
 
 ### Database Connection Issues

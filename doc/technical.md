@@ -2,12 +2,12 @@
 
 *Please read [Vehicle SDK](vehicle.md) beforehand to understand the overall concept of the Super Vehicle*
 
-Your vehicle is connected to the OpenOcc server via WebTransport constantly.
+Your vehicle is connected to the SteeringWheel server via WebTransport constantly.
 Additionally, an operator might open a WebRTC connection for teleoperation.
 A vehicle can have at most one WebRTC connection open.
 
 <div align="center">
-  <img src="figures/architecture.drawio.svg" alt="OpenOcc Architecture">
+  <img src="figures/architecture.drawio.svg" alt="SteeringWheel Architecture">
 </div>
 
 ## IOConf
@@ -43,7 +43,7 @@ This is done by the `VehicleClient` class internally using reflection.
 The following figure shows the initial connection process, which is carried out via WebTransport:
 
 <div align="center">
-  <img src="figures/connection.drawio.svg" alt="OpenOcc Architecture">
+  <img src="figures/connection.drawio.svg" alt="SteeringWheel Architecture">
 </div>
 
 First, the client connects to the server.
@@ -65,7 +65,7 @@ Sending commands is done in a rpc-like procedure:
   <img src="figures/rpc.drawio.svg" alt="RPC">
 </div>
 
-Within this procedure, the OpenOcc server simply redirects the command and it's parameters to the vehicle and redirects the result back to the client.
+Within this procedure, the SteeringWheel server simply redirects the command and it's parameters to the vehicle and redirects the result back to the client.
 The request is formatted as JSON:
 ```json
 {

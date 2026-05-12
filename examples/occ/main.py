@@ -6,9 +6,9 @@ from typing import Tuple
 
 from av.video import VideoFrame
 
-from openocc.operator import Operator, OperatorClient, RemoteVehicle
-from openocc.ioconf import IoConf
-from openocc.util import Gamepad
+from steering_wheel.operator import Operator, OperatorClient, RemoteVehicle
+from steering_wheel.ioconf import IoConf
+from steering_wheel.util import Gamepad
 import tkinter as tk
 from PIL import ImageTk
 import math
@@ -17,8 +17,8 @@ class VideoApp:
     def __init__(self, num_images: int):
         self.root = tk.Tk()
         self.root.geometry("800x600")
-        self.root.title("OpenOcc")
-        tk.Label(self.root, text="OpenOcc").pack()
+        self.root.title("SteeringWheel")
+        tk.Label(self.root, text="SteeringWheel").pack()
         cols = math.ceil(math.sqrt(num_images))
         rows = math.ceil(num_images / cols)
 

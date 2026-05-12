@@ -7,7 +7,7 @@ import argparse
 import asyncio
 import av
 
-from openocc.vehicle import Vehicle, VehicleClient
+from steering_wheel.vehicle import Vehicle, VehicleClient
 
 
 def main():

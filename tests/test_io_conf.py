@@ -1,5 +1,5 @@
 import unittest
-from openocc.ioconf import (
+from steering_wheel.ioconf import (
     incoming,
     outgoing,
     command,

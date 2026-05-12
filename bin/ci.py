@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).parent.parent
-SRC_DIR = PROJECT_ROOT / "openocc"
+SRC_DIR = PROJECT_ROOT / "steering_wheel"
 MIN_COVERAGE = 80
 
 

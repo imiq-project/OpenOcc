@@ -1,5 +1,5 @@
 from abc import ABC
-from openocc.ioconf import outgoing, incoming, command, DataType
+from steering_wheel.ioconf import outgoing, incoming, command, DataType
 from av.frame import Frame
 from abc import ABC, abstractmethod
 from .ioconf import IoConf, binding_for

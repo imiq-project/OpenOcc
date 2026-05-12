@@ -2,8 +2,8 @@ import logging
 import argparse
 import asyncio
 
-from openocc.vehicle import Vehicle, VehicleClient
-from openocc.util import animate_rainbow
+from steering_wheel.vehicle import Vehicle, VehicleClient
+from steering_wheel.util import animate_rainbow
 
 
 async def main():

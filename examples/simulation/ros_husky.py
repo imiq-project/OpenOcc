@@ -1,7 +1,7 @@
 """
 
 Subscribes to ROS topics published by the Webots simulation and exposes them
-through openocc.vehicle.Vehicle:
+through steering_wheel.vehicle.Vehicle:
 
   /camera/image_raw   →  get_front_camera()
   /vehicle_pose       →  get_position()
@@ -27,14 +27,14 @@ from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Image, NavSatFix
 from diagnostic_msgs.msg import DiagnosticArray
 
-from openocc.vehicle import Vehicle, VehicleClient
+from steering_wheel.vehicle import Vehicle, VehicleClient
 
 
 class RosNode(Node):
     """ROS subscriptions/publishers for the Husky."""
 
     def __init__(self) -> None:
-        super().__init__("openocc_husky")
+        super().__init__("steering_wheel_husky")
         self.latest_image: Image | None = None
         self.latest_odom: Odometry | None = None
         self.latest_fix: NavSatFix | None = None

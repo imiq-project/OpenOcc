@@ -25,4 +25,4 @@ jobs:
           python -m pip install -e ./vehicle-sdk[dev]
 
       - name: Run vehicle-sdk CI script
-        run: python ./vehicle-sdk/bin/ci.py
+        run: python ./bin/ci.py

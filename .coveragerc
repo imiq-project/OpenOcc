@@ -1,0 +1,7 @@
+[run]
+omit =
+    steering_wheel/util.py
+    steering_wheel/vehicle.py
+    steering_wheel/operator.py
+    steering_wheel/webtransport.py
+    steering_wheel/client.py

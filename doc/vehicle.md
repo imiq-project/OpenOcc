@@ -1,16 +1,16 @@
 # Vehicle SDK
 *For an in-depth technical description, please refer to [Technical Details](technical.md)*
 
-The vehicle sdk enables you to integrate your vehicle with OpenOcc.
+The vehicle sdk enables you to integrate your vehicle with SteeringWheel.
 We treat a vehicle as a very broad concept, which can be anything somewhat steer-able.
 This includes cars, bikes, robots, drones or even static things like a rotatable camera.
 To model all these heterogenous kinds of things, we introduce the abstract concept of a "Super-Vehicle".
 The Super-Vehicle has all imaginable features like all sorts of controls and cameras.
 
-When implementing your vehicle for OpenOcc you select a subset of all these features fitting your vehicle.
+When implementing your vehicle for SteeringWheel you select a subset of all these features fitting your vehicle.
 Using the sdk you then map these features to the correct physical interpretation.
 For example you map the concept of steering based on direction and speed to the actual movement of your wheels.
-On the other side, an operator can use OpenOcc's client to control any kind of vehicle by controlling it as a subset of the Super-Vehicle.
+On the other side, an operator can use SteeringWheel's client to control any kind of vehicle by controlling it as a subset of the Super-Vehicle.
 This means, that we map different input modes to abstract control commands of the Super-Vehicle
 
 <div align="center">
@@ -57,16 +57,16 @@ In the Python sdk, this is done by inheriting from the `Vehicle` base class.
 You then override the methods fitting your vehicle:
 
 ```python
-from openocc.vehicle import Vehicle
+from steering_wheel.vehicle import Vehicle
 class MyVehicle(Vehicle):
 
-    VEHICLE_ID = "my_vehicle" # Register this within OpenOcc's client ui
+    VEHICLE_ID = "my_vehicle" # Register this within SteeringWheel's client ui
 
     def set_motion(self, speed, angle) -> None:
         # Use speed and angle to move your vehicle accordingly
 ```
 
-You then pass your vehicle to the `VehicleClient` class which handles all the communication with OpenOcc and connected operators:
+You then pass your vehicle to the `VehicleClient` class which handles all the communication with SteeringWheel and connected operators:
 
 ```python
 import asyncio
@@ -80,7 +80,7 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-Inside `VehicleCleint` we use reflection to figure out which methods your vehicle overrides and publish this to OpenOcc's server.
+Inside `VehicleCleint` we use reflection to figure out which methods your vehicle overrides and publish this to SteeringWheel's server.
 This way, clients can adapt their ui depending on the features you chose to support.
 
 *For an in-depth technical description, please refer to [Technical Details](technical.md)*
