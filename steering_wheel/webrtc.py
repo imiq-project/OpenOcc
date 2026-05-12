@@ -59,6 +59,7 @@ class WebRtcClient:
             elif self._rtc_connection.connectionState == "connecting":
                 self.connection_state = ConnectionState.Connecting
             elif self._rtc_connection.connectionState == "connected":
+                self._last_message = time.monotonic()
                 asyncio.create_task(self.check_timeout())
                 # We set State.Connected after detection of two datachannels
             if self._rtc_connection.connectionState in ["failed", "closed"]:
