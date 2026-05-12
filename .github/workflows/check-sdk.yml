@@ -22,7 +22,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip setuptools wheel
-          python -m pip install -e ./vehicle-sdk[dev]
+          python -m pip install -e .[dev]
 
-      - name: Run vehicle-sdk CI script
+      - name: Run CI script
         run: python ./bin/ci.py

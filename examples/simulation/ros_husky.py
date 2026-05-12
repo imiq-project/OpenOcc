@@ -9,7 +9,7 @@ through steering_wheel.vehicle.Vehicle:
   set_motion()        →  /cmd_vel
 
 Run:
-  pip install -e <vehicle-sdk-path>
+  pip install -e <steering_wheel-path>
   python3 ros_husky.py --vehicle_id husky
 """
 

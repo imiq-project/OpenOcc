@@ -101,7 +101,7 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-See [vehicle-sdk/examples](vehicle-sdk/examples/) for more detailed examples and [Vehicle sdk](doc/vehicle.md) for in-depth documentation.
+See [examples](examples/) for more detailed examples and [Vehicle sdk](doc/vehicle.md) for in-depth documentation.
 
 
 ## Server Quick Start
