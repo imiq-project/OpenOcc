@@ -16,6 +16,9 @@ authors = [
 ]
 readme = "README.md"
 
+[tool.setuptools]
+packages = ["steering_wheel"]
+
 [tool.setuptools.dynamic]
 version = {attr = "steering_wheel.__version__"}
 
