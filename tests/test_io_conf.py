@@ -8,6 +8,7 @@ from steering_wheel.ioconf import (
     binding_for,
     IoConf,
 )
+from enum import Enum
 
 
 class IoConfFromClass(unittest.TestCase):
@@ -192,7 +193,6 @@ class IoConfFromClass(unittest.TestCase):
         self.assertEqual(len(binding.get_outgoing_tracks()), 2)
         tracks = binding.get_outgoing_tracks()
         self.assertEqual(len(tracks), 2)
-            
 
 
 class FromJson(unittest.TestCase):
@@ -362,6 +362,31 @@ class TransmitBinding(unittest.TestCase):
         payload = binding_receiver.encode_outgoing()
         binding_sender.decode_incoming(payload)
         self.assertEqual(sender.speed, 142)
+
+
+class ArgumentConversion(unittest.TestCase):
+
+    def test_convert_one_arg(self):
+
+        class Operation(Enum):
+            ADD = 1
+            SUB = 2
+
+        class MyVehicle:
+
+            @command("calc", convert_args=lambda args: [args[0], args[1], Operation(args[2])])
+            def calc(self, a, b, op: Operation):
+                if op == Operation.ADD:
+                    return a + b
+                else:
+                    return a - b
+
+        instance = MyVehicle()
+        conf = binding_for(instance, MyVehicle, True)
+        res = conf.invoke_command("calc", [20, 10, Operation.ADD.value])
+        self.assertEqual(res, 30)
+        res = conf.invoke_command("calc", [20, 10, Operation.SUB.value])
+        self.assertEqual(res, 10)
 
 
 if __name__ == "__main__":

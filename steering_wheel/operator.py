@@ -88,6 +88,9 @@ class RemoteVehicle(ABC):
 
         logging.info("WebRTC started")
 
+    async def invoke_command(self, method: str, params: List[Any]):
+        return await self.client.send_rpc_request(self.id, method, params)
+
 
 class Operator(ABC):
 

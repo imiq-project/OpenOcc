@@ -11,6 +11,7 @@ _COMMAND = "_command"
 
 from typing import Callable
 
+
 class CallbackVideoStream(VideoStreamTrack):
     def __init__(self, callback: Callable[[], Frame]) -> None:
         super().__init__()
@@ -22,6 +23,7 @@ class CallbackVideoStream(VideoStreamTrack):
         frame.pts = pts
         frame.time_base = time_base
         return frame
+
 
 class DataType(Enum):
     Int8 = "int8"
@@ -111,21 +113,26 @@ def outgoing(name, data_types: List[DataType]):
     return decorator
 
 
+def _keep_args(args: List[Any]) -> List[Any]:
+    return args
+
+
 @dataclass
 class Command:
     name: str
+    convert_args: Callable[[List[Any]], List[Any]]
 
     def to_json(self):
         return {"name": self.name}
 
     @classmethod
     def from_json(cls, data: dict) -> "Command":
-        return Command(name=data["name"])
+        return Command(name=data["name"], convert_args=_keep_args)
 
 
-def command(name):
+def command(name, convert_args: Callable[[List[Any]], List[Any]] = _keep_args):
     def decorator(func):
-        setattr(func, _COMMAND, Command(name))
+        setattr(func, _COMMAND, Command(name, convert_args))
         return func
 
     return decorator
@@ -215,6 +222,8 @@ class Binding:
             func = self._func_commands[method]
         except KeyError:
             raise IoConfException(f"Command {method} does not exist")
+        converter = [i for i in self.io_conf._commands if i.name == method][0].convert_args
+        params = converter(params)
         return func(*params)
 
     def get_outgoing_tracks(self) -> List[MediaStreamTrack]:
@@ -225,14 +234,13 @@ class Binding:
                     result.append(CallbackVideoStream(func))
         return result
 
-    def get_incoming_track_callbacks(self) -> List[Callable[[Frame],Any]]:
+    def get_incoming_track_callbacks(self) -> List[Callable[[Frame], Any]]:
         result = []
         for func, param in zip(self._func_incoming, self.io_conf._incoming):
             for dt in param.data_types:
                 if dt == DataType.Video or dt == DataType.Audio:
                     result.append(func)
         return result
-
 
     def narrow_down(self, sender_conf: IoConf):
         new_outgoing = []
@@ -284,14 +292,18 @@ def binding_for(instance: object, base_kls: Type, overridden_only: bool) -> Bind
         base_method = getattr(base_kls, name)
 
         input_param = getattr(base_method, _INPUT_PARAM, None)
-        if input_param and (_overrides(instance, name, base_kls) or not overridden_only):
+        if input_param and (
+            _overrides(instance, name, base_kls) or not overridden_only
+        ):
             assert isinstance(input_param, Param)
             child_method = getattr(instance, name)
             result.io_conf._incoming.append(input_param)
             result._func_incoming.append(child_method)
 
         output_param = getattr(base_method, _OUTPUT_PARAM, None)
-        if output_param and (_overrides(instance, name, base_kls) or not overridden_only):
+        if output_param and (
+            _overrides(instance, name, base_kls) or not overridden_only
+        ):
             assert isinstance(output_param, Param)
             child_method = getattr(instance, name)
             result.io_conf._outgoing.append(output_param)

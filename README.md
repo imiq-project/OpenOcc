@@ -187,6 +187,13 @@ google-chrome --enable-quic --origin-to-force-quic-on=localhost:443 https://loca
 
 ## Development Setup
 
+Install package locally:
+
+```sh
+git pull
+pip install -e .[dev]
+```
+
 The repository already ships a `compose.yml`suited for a local setup.
 Create a `compose.override.yml` to adapt it for your local environment:
 

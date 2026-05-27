@@ -32,14 +32,9 @@ def animate_rainbow(phase):
 
 class Gamepad:
 
-    def __init__(self, speed_axis: int, angle_axis: int, forwards_button:int, backwards_button: int) -> None:
-        self.speed: float = 0
-        self.angle: float = 0
+    def __init__(self, speed_axis: int, angle_axis: int) -> None:
         self.speed_axis = speed_axis
         self.angle_axis = angle_axis
-        self.forwards_button = forwards_button
-        self.backwards_button = backwards_button
-        self._forwards = True
 
     def loop(self):
         JS_EVENT_FORMAT = "IhBB"
@@ -61,20 +56,24 @@ class Gamepad:
                     continue
 
                 if type_ & JS_EVENT_BUTTON:
-                    if number == self.backwards_button:
-                        if value:
-                            self._forwards = False
-                    elif number == self.forwards_button:
-                        if value:
-                            self._forwards = True
-                    else:
-                        print(f"Button {number} {'pressed' if value else 'released'}")
+                    if value:
+                        self.on_button_pressed(number)
 
                 if type_ & JS_EVENT_AXIS:
                     if number == self.angle_axis:
-                        self.angle = value / -32767.0
+                        angle = value / -32767.0
+                        self.on_angle_changed(angle)
                     elif number == self.speed_axis:
                         speed = (value + 32767) / 2 / 32767.0
-                        self.speed = speed if self._forwards else -speed
+                        self.on_speed_changed(speed)
                     else:
                         print(f"Axis {number} value: {value}")
+
+    def on_button_pressed(self, number: int):
+        print(f"Button {number} pressed")
+
+    def on_speed_changed(self, speed: float):
+        pass
+
+    def on_angle_changed(self, angle: float):
+        pass

@@ -9,6 +9,12 @@ from typing import List, Any, Tuple, Dict, Optional
 import logging
 import json
 import asyncio
+from enum import Enum
+
+
+class SoundIntend(Enum):
+    SHORT_HONK = 1
+    LONG_HONK = 2
 
 
 class Vehicle(ABC):
@@ -51,6 +57,10 @@ class Vehicle(ABC):
     def move_to(self, lat, lon) -> None:
         raise NotImplemented()
 
+    @command("play_sound", convert_args=lambda args: [SoundIntend(args[0])])
+    def play_sound(self, intend: SoundIntend):
+        raise NotImplemented()
+
 
 class VehicleClient(ClientBase):
 
@@ -83,7 +93,9 @@ class VehicleClient(ClientBase):
     async def _process_webrtc_offer(self, offer: str):
         if self._rtc_connection is not None:
             if self._rtc_connection.connection_state == ConnectionState.Connected:
-                logging.error("Cannot process offer: WebRTC connection already established")
+                logging.error(
+                    "Cannot process offer: WebRTC connection already established"
+                )
                 return
             else:
                 await self._rtc_connection.close()
