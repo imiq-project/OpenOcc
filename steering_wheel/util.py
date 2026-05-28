@@ -1,5 +1,6 @@
 from av import VideoFrame
 import struct
+import asyncio
 
 
 def animate_rainbow(phase):
@@ -36,7 +37,7 @@ class Gamepad:
         self.speed_axis = speed_axis
         self.angle_axis = angle_axis
 
-    def loop(self):
+    async def loop(self):
         JS_EVENT_FORMAT = "IhBB"
         JS_EVENT_SIZE = struct.calcsize(JS_EVENT_FORMAT)
 
@@ -46,7 +47,7 @@ class Gamepad:
 
         with open("/dev/input/js0", "rb") as js:
             while True:
-                event = js.read(JS_EVENT_SIZE)
+                event = await asyncio.to_thread(js.read, JS_EVENT_SIZE)
                 if not event:
                     break
 
@@ -57,7 +58,7 @@ class Gamepad:
 
                 if type_ & JS_EVENT_BUTTON:
                     if value:
-                        self.on_button_pressed(number)
+                        await self.on_button_pressed(number)
 
                 if type_ & JS_EVENT_AXIS:
                     if number == self.angle_axis:
@@ -69,7 +70,7 @@ class Gamepad:
                     else:
                         print(f"Axis {number} value: {value}")
 
-    def on_button_pressed(self, number: int):
+    async def on_button_pressed(self, number: int):
         print(f"Button {number} pressed")
 
     def on_speed_changed(self, speed: float):

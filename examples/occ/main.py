@@ -3,10 +3,12 @@ import argparse
 import asyncio
 import threading
 from typing import Tuple, Optional
+import json
 
 from av.video import VideoFrame
 
 from steering_wheel.operator import Operator, OperatorClient, RemoteVehicle
+from steering_wheel.vehicle import SoundIntend
 from steering_wheel.ioconf import IoConf
 from steering_wheel.util import Gamepad
 import tkinter as tk
@@ -105,13 +107,27 @@ class MyGamepad(Gamepad):
         self.remote_vehicle = remote_vehicle
         self._forwards = True
 
-    def on_button_pressed(self, number: int):
+    async def on_button_pressed(self, number: int):
         if number == self.backwards_button:
             self._forwards = False
         elif number == self.forwards_button:
             self._forwards = True
-        elif number == 5:
-            asyncio.create_task(self.remote_vehicle.invoke_command("play_sound", [1]))
+        elif number == 0:
+            await self.remote_vehicle.invoke_command(
+                "play_sound", [SoundIntend.SHORT_HONK.value]
+            )
+        elif number == 1:
+            await self.remote_vehicle.invoke_command(
+                "play_sound", [SoundIntend.LONG_HONK.value]
+            )
+        elif number == 3:
+            await self.remote_vehicle.invoke_command(
+                "play_sound", [SoundIntend.FIND_ME.value]
+            )
+        elif number == 4:
+            await self.remote_vehicle.invoke_command(
+                "play_sound", [SoundIntend.ALARM.value]
+            )
         else:
             print(f"Unknown button {number} pressed")
 
@@ -145,6 +161,7 @@ async def start_async_loop(app: VideoApp):
         ) -> MyVehicle:
             vehicle = MyVehicle(client, id, io_conf)
             if id == target_vehicle:
+                print(json.dumps(io_conf.to_json(), indent=4))
                 self.vehicle_found.set_result(vehicle)
             return vehicle
 
@@ -158,7 +175,7 @@ async def start_async_loop(app: VideoApp):
     logging.info(f"Result: {result}")
 
     gamepad = MyGamepad(vehicle)
-    threading.Thread(target=gamepad.loop, daemon=True).start()
+    asyncio.create_task(gamepad.loop())
     await vehicle.start_webrtc()
 
     while True:

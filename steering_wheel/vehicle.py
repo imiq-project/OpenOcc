@@ -15,6 +15,8 @@ from enum import Enum
 class SoundIntend(Enum):
     SHORT_HONK = 1
     LONG_HONK = 2
+    ALARM = 3
+    FIND_ME = 4
 
 
 class Vehicle(ABC):
